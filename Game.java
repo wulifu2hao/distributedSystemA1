@@ -16,6 +16,7 @@ public class Game  {
     private static final int PRIMARY = 2;
 
     private static final String EMPTY = "";
+    private static final String TREASURE = "TREASURE";
 
     // tracker related properties
     String trackerIP = null;
@@ -34,9 +35,9 @@ public class Game  {
 
     Random rand;
 
-    Map<String, Coord> coord_map = new Hashtable<>();
-    String[][] player_maze = new String[N][N];
-    boolean[][] treasure_maze = new boolean[N][N]; //true for treasure exists; vice versa
+    Map<String, Coord> player_coord_map = new Hashtable<>();
+    String[][] maze = new String[N][N];
+    Map<String, Integer> player_scores = new Hashtable<>();
     Map<String, PlayerAddr> playerAddrMap = new Hashtable<>();
 
     public Game(String trackerIP, String trackerPort, String playerID){
@@ -55,7 +56,7 @@ public class Game  {
         // if yes just give an error and wait for the request to be retried
 
         // if no critical period, just add the player (happy path)
-        if (coord_map.size() >= N * N) {
+        if (player_coord_map.size() >= N * N) {
             return false;
         }
         addPlayerCoord(playerID);
@@ -65,23 +66,29 @@ public class Game  {
     }
 
     private void addPlayerCoord(String playerID) {
-        Coord coord;
-        do {
-            coord = new Coord(rand.nextInt(N), rand.nextInt(N));
-        } while (!player_maze[coord.x][coord.y].equals(EMPTY));
-        coord_map.put(playerID, coord);
-        player_maze[coord.x][coord.y] = playerID;
+        Coord emptyCoord = getRandEmptyCoord();
+        player_coord_map.put(playerID, emptyCoord);
+        maze[emptyCoord.x][emptyCoord.y] = playerID;
     }
 
     private void addPlayerAddr(String playerID, String ip, int port) {
         playerAddrMap.put(playerID, new PlayerAddr(ip, port));
     }
 
+    private Coord getRandEmptyCoord() {
+        Coord coord;
+        do {
+            coord = new Coord(rand.nextInt(N), rand.nextInt(N));
+        } while (!maze[coord.x][coord.y].equals(EMPTY));
+        return coord;
+    }
+
+
     // called by other players to apply a move
     // @return: boolean as update result: true for success
     public boolean applyPlayerMove(String playerID, String move){
         // the actual game logic goes here
-        Coord coord = coord_map.get(playerID);
+        Coord coord = player_coord_map.get(playerID);
         int newx = coord.x, newy = coord.y;
         switch (move){
             case MOVE_WEST:
@@ -93,22 +100,48 @@ public class Game  {
             case MOVE_NORTH:
                 newy --;
         }
-        if (!player_maze[newx][newy].equals(EMPTY)) {
+        if (!maze[newx][newy].equals(EMPTY) && !maze[newx][newy].equals(TREASURE)) {
             return false;
+        }
+        if (maze[newx][newy].equals(TREASURE)) {
+            generateRandTreasure();
+            incrPlayerScore(playerID);
         }
 
         // update
-        coord_map.put(playerID, new Coord(newx, newy));
-        player_maze[coord.x][coord.y] = EMPTY;
-        player_maze[newx][newy] = playerID;
+        player_coord_map.put(playerID, new Coord(newx, newy));
+        maze[coord.x][coord.y] = EMPTY;
+        maze[newx][newy] = playerID;
         // TODO: update backup
         return true;
+    }
+
+    private void generateRandTreasure() {
+        Coord emptyCoord = getRandEmptyCoord();
+        maze[emptyCoord.x][emptyCoord.y] = TREASURE;
+    }
+
+    private void incrPlayerScore(String playerID) {
+        if (!player_scores.containsKey(playerID)) {
+            player_scores.put(playerID, 1);
+        } else {
+            player_scores.put(playerID, player_scores.get(playerID) + 1);
+        }
     }
 
     // synchronize with backup with all the game state data
     // need to consider and handle the scenario when the backup is failed
     private boolean updateBackup() {
         return false;
+    }
+
+    private GameState prepareGameState() {
+        GameState gameState = new GameState();
+        gameState.coord_map = coord_map;
+        gameState.player_maze = player_maze;
+        gameState.treasure_maze = treasure_maze;
+        gameState.playerAddrMap = playerAddrMap;
+        return gameState;
     }
 
     // called by primary server itself to promote a server to backup
@@ -127,8 +160,10 @@ public class Game  {
 
     /******  for backup server only  ******/
     // called by primary server to update backup server state
-    public void updateGameState(){
-
+    public void updateGameState(GameState gameState){
+        coord_map = gameState.coord_map;
+        player_maze = gameState.player_maze;
+        playerAddrMap = gameState.playerAddrMap;
     }
 
     // promote self to become primary and notify other nodes
