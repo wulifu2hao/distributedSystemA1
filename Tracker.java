@@ -54,16 +54,7 @@ public class Tracker implements TrackerRemote {
             System.out.println("remote: " + remote);
             System.err.println("Server ready");
         } catch (Exception e) {
-            System.err.println("Server exception0: " + e.toString());
-            e.printStackTrace();
-            try{
-                registry.unbind(TAG);
-                registry.bind(TAG,remote);
-                System.err.println("Server ready");
-            }catch(Exception ee){
-                System.err.println("Server exception: " + ee.toString());
-                ee.printStackTrace();
-            }
+            Common.handleError(registry, remote, TAG, e);
         }
     }
 

@@ -1,6 +1,10 @@
+import java.rmi.Remote;
 import java.util.Hashtable;
 import java.util.Map;
 import java.util.Random;
+
+import java.rmi.registry.LocateRegistry;
+import java.rmi.registry.Registry;
 
 public class Game  {
 
@@ -48,6 +52,7 @@ public class Game  {
 
         initTreasures();
         // any other things to init here?
+
     }
 
     private void initTreasures() {
@@ -65,7 +70,7 @@ public class Game  {
         // if yes just give an error and wait for the request to be retried
 
         // if no critical period, just add the player (happy path)
-        if (playerCoordMap.size() + K >= N * N) {
+        if (isPlayersFull()) {
             return false;
         }
         addPlayerCoord(playerID);
@@ -73,6 +78,12 @@ public class Game  {
         // TODO: update to backup
         return true;
     }
+
+
+    private boolean isPlayersFull() {
+        return playerCoordMap.size() + K < N * N;
+    }
+
 
     private void addPlayerCoord(String playerID) {
         Coord emptyCoord = getRandEmptyCoord();
@@ -140,8 +151,23 @@ public class Game  {
 
     // synchronize with backup with all the game state data
     // need to consider and handle the scenario when the backup is failed
+
+    // TODO: currently using playerID as tag, is it correct?
     private boolean updateBackup() {
         // TODO: rpc call backup.updateGameState
+        PlayerAddr backupPlayerAddr = playerAddrMap.get(backupPlayerID);
+        Registry registry = null;
+        GameRemote remote = null;
+        try {
+            registry = LocateRegistry.getRegistry(backupPlayerAddr.ip_addr, backupPlayerAddr.port);
+            remote = (GameRemote) registry.lookup(backupPlayerID);
+
+            GameState gameState = prepareGameState();
+            remote.updateGameState(gameState);
+        }catch (Exception e) {
+            // TODO: customize error handling, for this case: backup fail or something
+            Common.handleError(registry, remote, backupPlayerID, e);
+        }
         return false;
     }
 
@@ -273,7 +299,7 @@ public class Game  {
             case MOVE_EAST:
             case MOVE_NORTH:
                 switch (this.gameRole){
-                    case 2:
+                    case PRIMARY:
                         // I am the primary server, I can just update my gamestate 
                         // remember to update backup server also
                     break;
