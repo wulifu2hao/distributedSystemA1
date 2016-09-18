@@ -108,7 +108,7 @@ public class Game  {
     // synchronize with backup with all the game state data
     // need to consider and handle the scenario when the backup is failed
     private boolean updateBackup() {
-        
+        return false;
     }
 
     // called by primary server itself to promote a server to backup
