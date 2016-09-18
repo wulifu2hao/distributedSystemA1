@@ -1,5 +1,6 @@
 import java.util.Hashtable;
 import java.util.Map;
+import java.util.Random;
 
 public class Game  {
 
@@ -31,27 +32,49 @@ public class Game  {
     String primaryPlayerID = "";
     String backupPlayerID = ""  ;
 
+    Random rand;
+
     Map<String, Coord> coord_map = new Hashtable<>();
     String[][] player_maze = new String[N][N];
     boolean[][] treasure_maze = new boolean[N][N]; //true for treasure exists; vice versa
+    Map<String, PlayerAddr> playerAddrMap = new Hashtable<>();
 
     public Game(String trackerIP, String trackerPort, String playerID){
         this.trackerIP = trackerIP;
         this.trackerPort = trackerPort;
         this.playerID = playerID;
-
+        this.rand = new Random();
         // any other things to init here?
     }
 
     /******   for primary server only  ******/
     // used when other player wants to join the game
     // the param and returned type for this method is not carefully considered yet
-    public void addOtherPlayer(){
+    public boolean addOtherPlayer(String playerID, String playerIP, int playerPort){
         // TODO: here the primary server should check whether it is in critical period (promoting new backup server, etc)
         // if yes just give an error and wait for the request to be retried
 
-        // if no critical period, just add the player
-        
+        // if no critical period, just add the player (happy path)
+        if (coord_map.size() >= N * N) {
+            return false;
+        }
+        addPlayerCoord(playerID);
+        addPlayerAddr(playerID, playerIP, playerPort);
+        // TODO: update to backup
+        return true;
+    }
+
+    private void addPlayerCoord(String playerID) {
+        Coord coord;
+        do {
+            coord = new Coord(rand.nextInt(N), rand.nextInt(N));
+        } while (!player_maze[coord.x][coord.y].equals(EMPTY));
+        coord_map.put(playerID, coord);
+        player_maze[coord.x][coord.y] = playerID;
+    }
+
+    private void addPlayerAddr(String playerID, String ip, int port) {
+        playerAddrMap.put(playerID, new PlayerAddr(ip, port));
     }
 
     // called by other players to apply a move
@@ -80,6 +103,12 @@ public class Game  {
         player_maze[newx][newy] = playerID;
         // TODO: update backup
         return true;
+    }
+
+    // synchronize with backup with all the game state data
+    // need to consider and handle the scenario when the backup is failed
+    private boolean updateBackup() {
+        
     }
 
     // called by primary server itself to promote a server to backup
