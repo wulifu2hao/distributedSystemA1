@@ -1,5 +1,13 @@
 
 public class Game  {
+
+    private static final String REFRESH = "0";
+    private static final String MOVE_WEST = "1";
+    private static final String MOVE_SOUTH = "2";
+    private static final String MOVE_EAST = "3";
+    private static final String MOVE_NORTH = "4";
+    private static final String EXIT = "9";
+
     // tracker related properties
     String trackerIP = null;
     String trackerPort = null;
@@ -146,11 +154,11 @@ public class Game  {
 
     public String move(String nextMove){
         switch (nextMove) {
-            case "0": 
-            case "1":
-            case "2":
-            case "3":
-            case "4":
+            case REFRESH:
+            case MOVE_WEST:
+            case MOVE_SOUTH:
+            case MOVE_EAST:
+            case MOVE_NORTH:
                 switch (this.gameRole){
                     case 2:
                         // I am the primary server, I can just update my gamestate 
@@ -165,7 +173,7 @@ public class Game  {
                 }
 
                 break;                
-            case "9":
+            case EXIT:
                 // exit
                 
                 // keep retrying until exit successfully
@@ -214,7 +222,6 @@ public class Game  {
             while (true) {
                 String nextMove = readNextMove();
                 player.move(nextMove);
-
             }
         }
 
