@@ -1,3 +1,5 @@
+import java.util.Hashtable;
+import java.util.Map;
 
 public class Game  {
 
@@ -7,6 +9,12 @@ public class Game  {
     private static final String MOVE_EAST = "3";
     private static final String MOVE_NORTH = "4";
     private static final String EXIT = "9";
+
+    private static final int NORMAL = 0;
+    private static final int BACKUP = 1;
+    private static final int PRIMARY = 2;
+
+    private static final String EMPTY = "";
 
     // tracker related properties
     String trackerIP = null;
@@ -19,9 +27,13 @@ public class Game  {
     // player info and gameboard info is needed here
 
     // game administration related properties
-    int gameRole = 0; //0 for normal, 1 for backup and 2 for primary
+    int gameRole = NORMAL; //0 for normal, 1 for backup and 2 for primary
     String primaryPlayerID = "";
     String backupPlayerID = ""  ;
+
+    Map<String, Coord> coord_map = new Hashtable<>();
+    String[][] player_maze = new String[N][N];
+    boolean[][] treasure_maze = new boolean[N][N]; //true for treasure exists; vice versa
 
     public Game(String trackerIP, String trackerPort, String playerID){
         this.trackerIP = trackerIP;
@@ -35,13 +47,39 @@ public class Game  {
     // used when other player wants to join the game
     // the param and returned type for this method is not carefully considered yet
     public void addOtherPlayer(){
-        // here the primary server should check whether it is in critical period (promiting new backup server, etc)
-        // if yes just give and error and wait for the request to be retried
+        // TODO: here the primary server should check whether it is in critical period (promoting new backup server, etc)
+        // if yes just give an error and wait for the request to be retried
+
+        // if no critical period, just add the player
+        
     }
 
     // called by other players to apply a move
-    public void applyPlayerMove(){
+    // @return: boolean as update result: true for success
+    public boolean applyPlayerMove(String playerID, String move){
         // the actual game logic goes here
+        Coord coord = coord_map.get(playerID);
+        int newx = coord.x, newy = coord.y;
+        switch (move){
+            case MOVE_WEST:
+                newx --;
+            case MOVE_SOUTH:
+                newy ++;
+            case MOVE_EAST:
+                newx ++;
+            case MOVE_NORTH:
+                newy --;
+        }
+        if (!player_maze[newx][newy].equals(EMPTY)) {
+            return false;
+        }
+
+        // update
+        coord_map.put(playerID, new Coord(newx, newy));
+        player_maze[coord.x][coord.y] = EMPTY;
+        player_maze[newx][newy] = playerID;
+        // TODO: update backup
+        return true;
     }
 
     // called by primary server itself to promote a server to backup
@@ -227,4 +265,13 @@ public class Game  {
 
     }
 
+}
+
+class Coord {
+    public int x;
+    public int y;
+    public Coord(int x, int y) {
+        this.x = x;
+        this.y = y;
+    }
 }
