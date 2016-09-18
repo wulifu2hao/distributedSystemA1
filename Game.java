@@ -35,9 +35,9 @@ public class Game  {
 
     Random rand;
 
-    Map<String, Coord> player_coord_map = new Hashtable<>();
+    Map<String, Coord> playerCoordMap = new Hashtable<>();
     String[][] maze = new String[N][N];
-    Map<String, Integer> player_scores = new Hashtable<>();
+    Map<String, Integer> playerScores = new Hashtable<>();
     Map<String, PlayerAddr> playerAddrMap = new Hashtable<>();
 
     public Game(String trackerIP, String trackerPort, String playerID){
@@ -45,8 +45,17 @@ public class Game  {
         this.trackerPort = trackerPort;
         this.playerID = playerID;
         this.rand = new Random();
+
+        initTreasures();
         // any other things to init here?
     }
+
+    private void initTreasures() {
+        for(int i = 0; i < K; i++) {
+            generateRandTreasure();
+        }
+    }
+
 
     /******   for primary server only  ******/
     // used when other player wants to join the game
@@ -56,7 +65,7 @@ public class Game  {
         // if yes just give an error and wait for the request to be retried
 
         // if no critical period, just add the player (happy path)
-        if (player_coord_map.size() >= N * N) {
+        if (playerCoordMap.size() + K >= N * N) {
             return false;
         }
         addPlayerCoord(playerID);
@@ -67,7 +76,7 @@ public class Game  {
 
     private void addPlayerCoord(String playerID) {
         Coord emptyCoord = getRandEmptyCoord();
-        player_coord_map.put(playerID, emptyCoord);
+        playerCoordMap.put(playerID, emptyCoord);
         maze[emptyCoord.x][emptyCoord.y] = playerID;
     }
 
@@ -88,7 +97,7 @@ public class Game  {
     // @return: boolean as update result: true for success
     public boolean applyPlayerMove(String playerID, String move){
         // the actual game logic goes here
-        Coord coord = player_coord_map.get(playerID);
+        Coord coord = playerCoordMap.get(playerID);
         int newx = coord.x, newy = coord.y;
         switch (move){
             case MOVE_WEST:
@@ -109,7 +118,7 @@ public class Game  {
         }
 
         // update
-        player_coord_map.put(playerID, new Coord(newx, newy));
+        playerCoordMap.put(playerID, new Coord(newx, newy));
         maze[coord.x][coord.y] = EMPTY;
         maze[newx][newy] = playerID;
         // TODO: update backup
@@ -122,24 +131,25 @@ public class Game  {
     }
 
     private void incrPlayerScore(String playerID) {
-        if (!player_scores.containsKey(playerID)) {
-            player_scores.put(playerID, 1);
+        if (!playerScores.containsKey(playerID)) {
+            playerScores.put(playerID, 1);
         } else {
-            player_scores.put(playerID, player_scores.get(playerID) + 1);
+            playerScores.put(playerID, playerScores.get(playerID) + 1);
         }
     }
 
     // synchronize with backup with all the game state data
     // need to consider and handle the scenario when the backup is failed
     private boolean updateBackup() {
+        // TODO: rpc call backup.updateGameState
         return false;
     }
 
     private GameState prepareGameState() {
         GameState gameState = new GameState();
-        gameState.coord_map = coord_map;
-        gameState.player_maze = player_maze;
-        gameState.treasure_maze = treasure_maze;
+        gameState.playerCoordMap = playerCoordMap;
+        gameState.maze = maze;
+        gameState.playerScores = playerScores;
         gameState.playerAddrMap = playerAddrMap;
         return gameState;
     }
@@ -161,8 +171,9 @@ public class Game  {
     /******  for backup server only  ******/
     // called by primary server to update backup server state
     public void updateGameState(GameState gameState){
-        coord_map = gameState.coord_map;
-        player_maze = gameState.player_maze;
+        maze = gameState.maze;
+        playerCoordMap = gameState.playerCoordMap;
+        playerScores = gameState.playerScores;
         playerAddrMap = gameState.playerAddrMap;
     }
 
