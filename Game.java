@@ -106,7 +106,7 @@ public class Game  {
 
     // called by other players to apply a move
     // @return: boolean as update result: true for success
-    public boolean applyPlayerMove(String playerID, String move){
+    public GameState applyPlayerMove(String playerID, String move){
         // the actual game logic goes here
         Coord coord = playerCoordMap.get(playerID);
         int newx = coord.x, newy = coord.y;
@@ -121,19 +121,19 @@ public class Game  {
                 newy --;
         }
         if (!maze[newx][newy].equals(EMPTY) && !maze[newx][newy].equals(TREASURE)) {
-            return false;
+            return prepareGameState();
         }
         if (maze[newx][newy].equals(TREASURE)) {
             generateRandTreasure();
             incrPlayerScore(playerID);
         }
 
-        // update
+        // update player coord
         playerCoordMap.put(playerID, new Coord(newx, newy));
         maze[coord.x][coord.y] = EMPTY;
         maze[newx][newy] = playerID;
         // TODO: update backup
-        return true;
+        return prepareGameState();
     }
 
     private void generateRandTreasure() {
@@ -298,17 +298,13 @@ public class Game  {
             case MOVE_SOUTH:
             case MOVE_EAST:
             case MOVE_NORTH:
-                switch (this.gameRole){
-                    case PRIMARY:
-                        // I am the primary server, I can just update my gamestate 
-                        // remember to update backup server also
-                    break;
-
-                    default:
-                        // call primary server's method to update 
-                        // if error = illegal move, still update the game state then ends
-                        // if error is something like primary server uncontactable, then sleep and retry..
-                    break;
+                if (this.gameRole == PRIMARY) {
+                    // I am the primary server, I can just update my gamestate
+                    // remember to update backup server also
+                } else {
+                    // call primary server's method to update
+                    // if error = illegal move, still update the game state then ends
+                    // if error is something like primary server uncontactable, then sleep and retry..
                 }
 
                 break;                
