@@ -20,7 +20,7 @@ public class Game  {
     private static final int PRIMARY = 2;
 
     private static final String EMPTY = "";
-    private static final String TREASURE = "TREASURE";
+    private static final String TREASURE = "*";
 
     // tracker related properties
     String trackerIP = null;
