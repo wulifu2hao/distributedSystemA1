@@ -52,6 +52,7 @@ public class Game  {
 
         initTreasures();
         // any other things to init here?
+        // TODO: init rmi registry here
 
     }
 
@@ -300,9 +301,13 @@ public class Game  {
             case MOVE_NORTH:
                 if (this.gameRole == PRIMARY) {
                     // I am the primary server, I can just update my gamestate
-                    // remember to update backup server also
+                    this.applyPlayerMove(this.playerID, nextMove)
                 } else {
+                    // TODO
                     // call primary server's method to update
+                    // playerAddrMap.get(primaryPlayerID)
+
+
                     // if error = illegal move, still update the game state then ends
                     // if error is something like primary server uncontactable, then sleep and retry..
                 }
@@ -336,6 +341,9 @@ public class Game  {
                     if (exitSucceeded){
                         break;
                     }
+
+                    // TODO
+                    // sleep for a while
                 }
 
                 // notify tracker that I have exited
