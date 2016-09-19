@@ -18,28 +18,32 @@ public class GameInterface extends JFrame {
      *
      * @param args
      */
+
+    private JPanel center;
+    private InterfaceData data;
+
     public static void main(String[] args) {
 
         // test game info
         String[][] maze = new String[][]{
-            {"*","dd","*",""},
-            {"","","aa",""},
-            {"","*","","xx"},
-            {"","","zz",""}
+                {"*", "dd", "*", ""},
+                {"", "", "aa", ""},
+                {"", "*", "", "xx"},
+                {"", "", "zz", ""}
         };
         Map<String, Integer> playerScores = new Hashtable<>();
-        playerScores.put("dd",5);
-        playerScores.put("aa",0);
-        playerScores.put("xx",3);
-        playerScores.put("zz",2);
+        playerScores.put("dd", 5);
+        playerScores.put("aa", 0);
+        playerScores.put("xx", 3);
+        playerScores.put("zz", 2);
 
-        GameInfo gameInfo = new GameInfo();
-        gameInfo.playerID = "xx";
-        gameInfo.dim = 4;
-        gameInfo.maze = maze;
-        gameInfo.playerScores = playerScores;
+        InterfaceData data = new InterfaceData();
+        data.playerID = "xx";
+        data.dim = 4;
+        data.maze = maze;
+        data.playerScores = playerScores;
 
-        JFrame f = new GameInterface(gameInfo);
+        JFrame f = new GameInterface(data);
         // f.setSize(251,202); // -> set window size explicitly
         f.pack(); // -> causes this window to be sized to fit the preferred size
         // and layouts of its subcomponents.
@@ -49,21 +53,31 @@ public class GameInterface extends JFrame {
     /**
      * GameInterface Creator
      */
-    GameInterface(GameInfo gameInfo) {
+    GameInterface(InterfaceData data) {
 
-        super("PlayerID: " + gameInfo.playerID); // -> set title
+        super("PlayerID: " + data.playerID); // -> set title
 
-        int dim = gameInfo.dim;
-        String[][] maze = gameInfo.maze;
-        Map<String, Integer> playerScores = gameInfo.playerScores;
+        this.data = data;
 
 		/* init frame */
         setDefaultCloseOperation(EXIT_ON_CLOSE); // -> otherwise window will not
         // close
         setLayout(new BorderLayout());
+        drawCenter();
+    }
 
-		/* add center panel with flowlayout */
-        JPanel center = new JPanel();
+    public void update(InterfaceData data) {
+        this.data = data;
+        drawCenter();
+    }
+
+    private void drawCenter() {
+        int dim = data.dim;
+        String[][] maze = data.maze;
+        Map<String, Integer> playerScores = data.playerScores;
+
+        /* add center panel with flowlayout */
+        center = new JPanel();
         center.setLayout(new FlowLayout());
         center.setBorder(new EmptyBorder(10, 10, 10, 10));
         add(center, BorderLayout.CENTER);
@@ -75,7 +89,7 @@ public class GameInterface extends JFrame {
         center.add(centerleft);
 
 		/* add button with a action listener */
-		for (int x = 0; x < dim; x++) {
+        for (int x = 0; x < dim; x++) {
             for (int y = 0; y < dim; y++) {
                 JLabel block = new JLabel(maze[x][y]);
                 block.setBorder(BorderFactory.createLineBorder(Color.black));
@@ -88,18 +102,9 @@ public class GameInterface extends JFrame {
         centerright.setBorder(new EmptyBorder(10, 10, 10, 10));
         center.add(centerright);
 
-        for (Map.Entry<String,Integer> entry : playerScores.entrySet()) {
+        for (Map.Entry<String, Integer> entry : playerScores.entrySet()) {
             JLabel block = new JLabel(entry.getKey() + ": " + entry.getValue());
             centerright.add(block);
         }
-
     }
-
-}
-
-class GameInfo {
-    public String playerID;
-    public int dim;
-    public String[][] maze;
-    public Map<String, Integer> playerScores;
 }
