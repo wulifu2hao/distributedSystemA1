@@ -12,7 +12,7 @@ import java.rmi.server.UnicastRemoteObject;
  */
 public class Tracker implements TrackerRemote {
 
-    private static final String TAG = "getPlayerAddr";
+    private static final String TAG = "tracker";
     private Set<PlayerAddr> addr_set;
     private int dim, treasures_num;
 
