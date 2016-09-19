@@ -321,7 +321,7 @@ public class Game  {
                     // TODO
                     // call primary server's method to update
                     // playerAddrMap.get(primaryPlayerID)
-
+                    GameState gameState = remoteApplyMove(nextMove);
 
                     // if error = illegal move, still update the game state then ends
                     // if error is something like primary server uncontactable, then sleep and retry..
