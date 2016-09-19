@@ -6,7 +6,7 @@ import java.util.Random;
 import java.rmi.registry.LocateRegistry;
 import java.rmi.registry.Registry;
 
-public class Game  {
+public class Game implements GameRemote {
 
     private static final String REFRESH = "0";
     private static final String MOVE_WEST = "1";
@@ -23,9 +23,9 @@ public class Game  {
     private static final String TREASURE = "*";
 
     // tracker related properties
-    String trackerIP = null;
-    String trackerPort = null;
-    String playerID = null;
+    public String trackerIP = null;
+    public String trackerPort = null;
+    public String playerID = null;
 
     // game play related properties
     int N = -1;
@@ -301,7 +301,7 @@ public class Game  {
             case MOVE_NORTH:
                 if (this.gameRole == PRIMARY) {
                     // I am the primary server, I can just update my gamestate
-                    this.applyPlayerMove(this.playerID, nextMove)
+                    this.applyPlayerMove(this.playerID, nextMove);
                 } else {
                     // TODO
                     // call primary server's method to update

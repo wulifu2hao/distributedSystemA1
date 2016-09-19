@@ -1,5 +1,8 @@
 import java.rmi.Remote;
 import java.rmi.registry.Registry;
+import java.rmi.registry.LocateRegistry;
+import java.rmi.RemoteException;
+import java.rmi.server.UnicastRemoteObject;
 
 public class Common {
     public static void handleError(Registry registry, Remote remote, String tag, Exception e) {
@@ -25,17 +28,17 @@ public class Common {
             int freeport = 0;
             stub = (GameRemote) UnicastRemoteObject.exportObject(game, freeport);
             registry = LocateRegistry.getRegistry();
-            registry.bind("Hello", stub);
+            registry.bind(game.playerID, stub);
 
-            System.err.println("Server ready");
+            System.err.println("player "+game.playerID+" ready");
         } catch (Exception e) {
             try{
                 e.printStackTrace();
-                registry.unbind("Hello");
-            registry.bind("Hello",stub);
-                System.err.println("Server ready");
+                registry.unbind(game.playerID);
+                registry.bind(game.playerID, stub);
+                System.err.println("player "+game.playerID+" ready");
             }catch(Exception ee){
-            System.err.println("Server exception: " + ee.toString());
+                System.err.println("player exception: " + ee.toString());
                 ee.printStackTrace();
             }
         }
