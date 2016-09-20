@@ -7,6 +7,7 @@ import java.util.Random;
 import java.rmi.registry.LocateRegistry;
 import java.rmi.registry.Registry;
 import java.rmi.RemoteException;
+import java.util.logging.Logger;
 
 public class Game implements GameRemote {
 
@@ -27,22 +28,24 @@ public class Game implements GameRemote {
     private static final String EMPTY = "";
     private static final String TREASURE = "*";
 
+    private static final int SLEEP_PERIOD = 100;
+
     // tracker related properties
     public String trackerIP = null;
     public String trackerPort = null;
     TrackerRemote trackerStub = null;
     
+
     // game play related properties
     int N = -1;
     int K = -1;
-    Random rand;
 
     // game administration related properties
     int gameRole = NORMAL; //0 for normal, 1 for backup and 2 for primary
-    PlayerAddr myPlayerAddr;
-
+    public String playerID = null;
     String primaryPlayerID = "";
     String backupPlayerID = ""  ;
+    PlayerAddr myPlayerAddr;
     
     // game state
     Map<String, Coord> playerCoordMap = new Hashtable<>();
@@ -52,7 +55,11 @@ public class Game implements GameRemote {
 
     // GUI
     GameInterface gameInterface;
-    
+
+    // logging
+    private final Logger LOGGER = Logger.getLogger("Game");
+
+
     // Constructor
     public Game(String trackerIP, String trackerPort, String playerID) throws RemoteException, NotBoundException{
         this.trackerIP = trackerIP;
@@ -78,18 +85,18 @@ public class Game implements GameRemote {
     /******   for primary server only  ******/
     // used when other player wants to join the game
     // the param and returned type for this method is not carefully considered yet
-    public GameState addOtherPlayer(PlayerAddr playerAddr){
+    public boolean addOtherPlayer(String playerID, String playerIP, int playerPort){
         // TODO: here the primary server should check whether it is in critical period (promoting new backup server, etc)
         // if yes just give an error and wait for the request to be retried
 
         // if no critical period, just add the player (happy path)
         if (isPlayersFull()) {
-            return null;
+            return false;
         }
-        addPlayerCoord(playerAddr.playerID);
-        addPlayerAddr(playerAddr.playerID, playerAddr.ip_addr, playerAddr.port);
+        addPlayerCoord(playerID);
+        addPlayerAddr(playerID, playerIP, playerPort);
         // TODO: update to backup
-        return null;
+        return true;
     }
 
 
@@ -133,6 +140,10 @@ public class Game implements GameRemote {
             case MOVE_NORTH:
                 newy --;
         }
+        if (newx < 0 || newx >= N || newy < 0 || newy >= N) {
+            LOGGER.warning("Illegal move");
+            return prepareGameState();
+        }
         if (!maze[newx][newy].equals(EMPTY) && !maze[newx][newy].equals(TREASURE)) {
             return prepareGameState();
         }
@@ -152,6 +163,7 @@ public class Game implements GameRemote {
     private void generateRandTreasure() {
         Coord emptyCoord = getRandEmptyCoord();
         maze[emptyCoord.x][emptyCoord.y] = TREASURE;
+        LOGGER.fine("generate treasure at " + emptyCoord.x + " : " + emptyCoord.y);
     }
 
     private void incrPlayerScore(String playerID) {
@@ -235,18 +247,13 @@ public class Game implements GameRemote {
         return null;
     }
 
+
+
+
     /******  End of remote method for all players  ******/
 
-    public GameRemote getPlayerStub(PlayerAddr playerAddr) throws RemoteException, NotBoundException{
-        // TODO: if uncontactable, return null
-        String targetPlayerIP = playerAddr.ip_addr;
-        String targetPlayerID = playerAddr.playerID;
-        Registry targetPlayerRegistry = LocateRegistry.getRegistry(targetPlayerID);
-        GameRemote targetPlayerStub = (GameRemote) targetPlayerRegistry.lookup(targetPlayerID);
 
-        return targetPlayerStub;
-    }
-;
+
     public boolean joinGame() throws RemoteException, NotBoundException{
         // try join game till success
         // assume the tracker never fails, it should be able to joingame just by keep retrying
@@ -274,43 +281,38 @@ public class Game implements GameRemote {
             } else {
                 // contact this player to get the primary server contact
 
-                // TODO: handle uncontactable case               
-                GameRemote targetPlayerStub = this.getPlayerStub(response.playerAddr);
-                if (targetPlayerStub == null){
-                    // player uncontactable, retry
-                    continue;
-                }
+                // TODO: handle uncontactable case
+                String targetPlayerIP = response.playerAddr.ip_addr;
+                String targetPlayerID = response.playerAddr.playerID;
+                Registry targetPlayerRegistry = LocateRegistry.getRegistry(targetPlayerID);
+                GameRemote targetPlayerStub = (GameRemote) targetPlayerRegistry.lookup(targetPlayerID);
                 
                 PlayerAddr primaryServerAddr =  targetPlayerStub.getPrimaryServer();
-                // TODO: handle getPrimaryServer failure here
 
-                GameRemote primaryPlayerStub = this.getPlayerStub(primaryServerAddr);
-                if (primaryPlayerStub == null){
-                    // cannot contact primary server
-                    continue;
-                }
                 
+
                 // 2. keep calling this primary server to join game until succeed or primary server unavailable
                 while (true) {
                     // call primaryPlayerID.addOtherPlayer()
                     //   if uncontactable, break this loop and continue the whole thing
                     //   if fail (primary server tells you that you join fail), just retry after some time (0.5s?)
                     //   if succeed, just break the outmost loop
-                    
-                    GameState gameState = primaryPlayerStub.addOtherPlayer(this.myPlayerAddr);
-                    // TODO: handle uncontactable case
 
-                    if (gameState == null) {
-                        // primary is contactable but join game fail
-                        // TODO: sleep and retry
-                    }
+                    // TODO: handle uncontactable case
+                    String primaryPlayerIP = primaryServerAddr.ip_addr;
+                    String primaryPlayerID = primaryServerAddr.playerID;
+                    Registry primaryPlayerRegistry = LocateRegistry.getRegistry(primaryPlayerIP);
+                    GameRemote primaryPlayerStub = (GameRemote) primaryPlayerRegistry.lookup(primaryPlayerID);
+
+                    
 
                     // when succeed, the primary server should returned the most up-to-date game state 
                     // and we should update our game state accordingly
                     this.primaryPlayerID = primaryPlayerID;
-                    this.updateGameState(gameState);
-                    joinSucceed = true;
+
                 }
+
+
             }
 
             if (joinSucceed){
@@ -352,12 +354,18 @@ public class Game implements GameRemote {
             GameState gameState = primaryRemote.applyPlayerMove(this.myPlayerAddr.playerID, nextMove);
             return gameState;
         }catch (Exception e) {
+            LOGGER.warning("[remoteApplyMove] error: " + e);
             Common.handleError(registry, primaryRemote, primaryPlayerID, e);
+            // connection error return null
+            return null;
         }
-        return null;
     }
 
-    public void move(String nextMove){
+    private void remoteApplyExit() {
+
+    }
+
+    public void move(String nextMove) throws InterruptedException{
         switch (nextMove) {
             case REFRESH:
             case MOVE_WEST:
@@ -371,11 +379,17 @@ public class Game implements GameRemote {
                     // TODO
                     // call primary server's method to update
                     // playerAddrMap.get(primaryPlayerID)
-                    GameState gameState = remoteApplyMove(nextMove);
-                    InterfaceData interfaceData = prepareInterfaceData(gameState);
-                    gameInterface.updateInterface(interfaceData);
                     // if error = illegal move, still update the game state then ends
+                    GameState gameState = remoteApplyMove(nextMove);
+
                     // if error is something like primary server uncontactable, then sleep and retry..
+                    while (gameState == null) {
+                        Thread.sleep(SLEEP_PERIOD);
+                        gameState = remoteApplyMove(nextMove);
+                        LOGGER.warning("[move] remoteApplyMove gameState = NULL, retry");
+                    }
+                    InterfaceData interfaceData = Common.prepareInterfaceData(gameState);
+                    gameInterface.updateInterface(interfaceData);
                 }
 
                 break;                
@@ -420,13 +434,6 @@ public class Game implements GameRemote {
         }
     }
 
-    private InterfaceData prepareInterfaceData(GameState gameState) {
-        InterfaceData interfaceData = new InterfaceData();
-        interfaceData.maze = gameState.maze;
-        interfaceData.playerScores = gameState.playerScores;
-        return interfaceData;
-    }
-
     public static void main(String[] args) {
         if (args.length != 3) {
             System.out.println("Wrong number of parameters...exiting");
@@ -445,6 +452,9 @@ public class Game implements GameRemote {
             be.printStackTrace();
         } catch (RemoteException re) {
             re.printStackTrace();
+        } catch (InterruptedException ie) {
+            System.out.println(ie);
+            Thread.currentThread().interrupt();
         }
     }
 

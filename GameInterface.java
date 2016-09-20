@@ -7,6 +7,7 @@ import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.util.Hashtable;
 import java.util.Map;
+import java.util.logging.Logger;
 
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
@@ -21,6 +22,7 @@ public class GameInterface extends JFrame {
 
     private JPanel center;
     private InterfaceData data;
+    private final Logger LOGGER = Logger.getLogger("GameInterface");
 
     public static void main(String[] args) {
 
@@ -60,6 +62,7 @@ public class GameInterface extends JFrame {
         this.data = data;
 
 		/* init frame */
+		LOGGER.info("init Game Interface");
         setDefaultCloseOperation(EXIT_ON_CLOSE); // -> otherwise window will not
         // close
         setLayout(new BorderLayout());
