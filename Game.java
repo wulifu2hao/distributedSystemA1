@@ -7,6 +7,7 @@ import java.util.Random;
 import java.rmi.registry.LocateRegistry;
 import java.rmi.registry.Registry;
 import java.rmi.RemoteException;
+import java.util.Scanner;
 import java.util.logging.Logger;
 
 public class Game implements GameRemote {
@@ -137,6 +138,7 @@ public class Game implements GameRemote {
         }
         return prepareGameState();
     }
+
 
     // called by other players to apply a move
     // @return: boolean as update result: true for success
@@ -386,11 +388,7 @@ public class Game implements GameRemote {
         return false;
     }
 
-    public static String readNextMove(){
-        // implement read command from standard input here
-        
-        return "0";
-    }
+
 
     private GameState remoteApplyMove(String nextMove) {
         PlayerAddr primaryPlayerAddr = playerAddrMap.get(primaryPlayerID);
@@ -491,13 +489,21 @@ public class Game implements GameRemote {
             System.out.println("Wrong number of parameters...exiting");
             System.exit(0);
         }
+        Scanner keyboard = new Scanner(System.in);
+        System.out.println("enter an integer");
 
         try {
             Game player = new Game(args[0], args[1], args[2]);
-            if (player.joinGame()) {
-                while (true) {
-                    String nextMove = readNextMove();
-                    player.move(nextMove);
+            // keep retrying joinGame
+            while (!player.joinGame()) {
+                Thread.sleep(SLEEP_PERIOD);
+                System.out.println("[main] join game fail, retry");
+            }
+            while (true) {
+                String nextMove = keyboard.nextLine();
+                player.move(nextMove);
+                if (nextMove == EXIT ){
+
                 }
             }
         } catch (NotBoundException be) {
