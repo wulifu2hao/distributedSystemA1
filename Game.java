@@ -17,9 +17,9 @@ public class Game implements GameRemote {
     private static final String MOVE_NORTH = "4";
     private static final String EXIT = "9";
 
-    private static final int NORMAL = 0;
-    private static final int BACKUP = 1;
-    private static final int PRIMARY = 2;
+    public static final int NORMAL = 0;
+    public static final int BACKUP = 1;
+    public static final int PRIMARY = 2;
 
     private static final String EMPTY = "";
     private static final String TREASURE = "*";
@@ -412,7 +412,6 @@ public class Game implements GameRemote {
 
     private InterfaceData prepareInterfaceData(GameState gameState) {
         InterfaceData interfaceData = new InterfaceData();
-        interfaceData.dim = N;
         interfaceData.maze = gameState.maze;
         interfaceData.playerScores = gameState.playerScores;
         return interfaceData;
