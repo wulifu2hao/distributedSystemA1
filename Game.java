@@ -69,9 +69,9 @@ public class Game implements GameRemote {
         Registry registry = LocateRegistry.getRegistry(trackerIP);
         this.trackerStub = (TrackerRemote) registry.lookup("tracker");
 
-        Common.registerGame(this);
         // TODO: init my player address
         // this.myPlayerAddr = new PlayerAddr()
+        Common.registerGame(this);        
         // any other things to init here?
     }
 
