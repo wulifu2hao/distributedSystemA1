@@ -10,6 +10,7 @@ import java.rmi.RemoteException;
 
 public class Game implements GameRemote {
 
+    // game move type
     private static final String REFRESH = "0";
     private static final String MOVE_WEST = "1";
     private static final String MOVE_SOUTH = "2";
@@ -17,10 +18,12 @@ public class Game implements GameRemote {
     private static final String MOVE_NORTH = "4";
     private static final String EXIT = "9";
 
+    // game role type
     public static final int NORMAL = 0;
     public static final int BACKUP = 1;
     public static final int PRIMARY = 2;
 
+    // game board content
     private static final String EMPTY = "";
     private static final String TREASURE = "*";
 
@@ -36,13 +39,12 @@ public class Game implements GameRemote {
 
     // game administration related properties
     int gameRole = NORMAL; //0 for normal, 1 for backup and 2 for primary
-    String playerID = null;
     PlayerAddr myPlayerAddr;
 
     String primaryPlayerID = "";
     String backupPlayerID = ""  ;
     
-    
+    // game state
     Map<String, Coord> playerCoordMap = new Hashtable<>();
     String[][] maze = new String[N][N];
     Map<String, Integer> playerScores = new Hashtable<>();
@@ -55,7 +57,6 @@ public class Game implements GameRemote {
     public Game(String trackerIP, String trackerPort, String playerID) throws RemoteException, NotBoundException{
         this.trackerIP = trackerIP;
         this.trackerPort = trackerPort;
-        this.playerID = playerID;
         this.rand = new Random();
         
         Registry registry = LocateRegistry.getRegistry(trackerIP);
@@ -257,10 +258,10 @@ public class Game implements GameRemote {
             this.K = response.treasures_num;            
             
             boolean joinSucceed = false;
-            if (playerID == ""){
+            if (this.myPlayerAddr == null){
                 // we will become the primary server!
                 if (!this.trackerStub.addPrimaryPlayer(this.myPlayerAddr)) {
-                    // fail to become the primary server...
+                    // fail to become the primary server
                     // maybe another player has already become the primary
                     // ley's retry joingame
                     continue;
@@ -348,7 +349,7 @@ public class Game implements GameRemote {
         try {
             registry = LocateRegistry.getRegistry(primaryPlayerAddr.ip_addr, primaryPlayerAddr.port);
             primaryRemote = (GameRemote) registry.lookup(primaryPlayerID);
-            GameState gameState = primaryRemote.applyPlayerMove(playerID, nextMove);
+            GameState gameState = primaryRemote.applyPlayerMove(this.myPlayerAddr.playerID, nextMove);
             return gameState;
         }catch (Exception e) {
             Common.handleError(registry, primaryRemote, primaryPlayerID, e);
@@ -365,7 +366,7 @@ public class Game implements GameRemote {
             case MOVE_NORTH:
                 if (this.gameRole == PRIMARY) {
                     // I am the primary server, I can just update my gamestate
-                    this.applyPlayerMove(this.playerID, nextMove);
+                    this.applyPlayerMove(this.myPlayerAddr.playerID, nextMove);
                 } else {
                     // TODO
                     // call primary server's method to update
