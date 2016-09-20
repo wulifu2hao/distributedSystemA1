@@ -306,7 +306,6 @@ public class Game implements GameRemote {
             } else {
                 // contact this player to get the primary server contact
 
-                // TODO: handle uncontactable case
                 boolean isUncontactable = false;
                 PlayerAddr primaryServerAddr = null;
                 try {
@@ -317,36 +316,51 @@ public class Game implements GameRemote {
                         primaryServerAddr =  targetPlayerStub.getPrimaryServer();    
                     }                    
                 } catch (Exception e) {
+                    // TODO: log this exception in a simple way
                     isUncontactable = true;
                 }             
 
-
+                if (isUncontactable || primaryServerAddr == null) {
+                    // retry
+                    continue;
+                }
                 
 
                 
 
                 // 2. keep calling this primary server to join game until succeed or primary server unavailable
                 while (true) {
-                    // call primaryPlayerID.addOtherPlayer()
-                    //   if uncontactable, break this loop and continue the whole thing
-                    //   if fail (primary server tells you that you join fail), just retry after some time (0.5s?)
-                    //   if succeed, just break the outmost loop
+                    // try to ask primary to add me to the game
+                    isUncontactable = false;
+                    GameState gameState = null;
+                    try{
+                        GameRemote primaryPlayerStub = this.getPlayerStub(primaryServerAddr);
+                        if (primaryPlayerStub == null) {
+                            isUncontactable = true;
+                        } else {
+                            gameState = primaryPlayerStub.addOtherPlayer(this.myPlayerAddr);    
+                        }
+                    } catch (Exception e) {
+                        isUncontactable = true;
+                    }
 
-                    // TODO: handle uncontactable case
-                    String primaryPlayerIP = primaryServerAddr.ip_addr;
-                    String primaryPlayerID = primaryServerAddr.playerID;
-                    Registry primaryPlayerRegistry = LocateRegistry.getRegistry(primaryPlayerIP);
-                    GameRemote primaryPlayerStub = (GameRemote) primaryPlayerRegistry.lookup(primaryPlayerID);
+                    if (isUncontactable) {
+                        // fail because primary not contactable
+                        // break this loop and continue the whole thing
+                        break;
+                    }
 
-                    
+                    if (gameState == null) {
+                        // fail because primary doesn't allow you to join
+                        // TODO: sleep for some time here
+                        continue;
+                    }
 
                     // when succeed, the primary server should returned the most up-to-date game state 
                     // and we should update our game state accordingly
-                    this.primaryPlayerID = primaryPlayerID;
-
+                    this.primaryPlayerID = primaryServerAddr.playerID;
+                    this.updateGameState(gameState);
                 }
-
-
             }
 
             if (joinSucceed){
