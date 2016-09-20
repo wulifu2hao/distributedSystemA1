@@ -281,7 +281,7 @@ public class Game implements GameRemote {
     }
 
 
-    public boolean joinGame() throws RemoteException, NotBoundException{
+    public boolean joinGame() throws RemoteException, NotBoundException, InterruptedException{
         // try join game till success
         // assume the tracker never fails, it should be able to joingame just by keep retrying
         while (true) {
@@ -304,6 +304,8 @@ public class Game implements GameRemote {
                 // initialization for primary server
                 this.gameRole = 2;
                 initTreasures();
+                joinSucceed = true;
+                LOGGER.info("join game succeeded");
 
             } else {
                 // contact this player to get the primary server contact
@@ -319,15 +321,15 @@ public class Game implements GameRemote {
                     }                    
                 } catch (Exception e) {
                     // TODO: log this exception in a simple way
+                    LOGGER.warning("another player with id: "+response.playerAddr.playerID+" uncontactable! " + e);
                     isUncontactable = true;
                 }             
 
                 if (isUncontactable || primaryServerAddr == null) {
                     // retry
+                    LOGGER.info("fail to get primaryServerAddr, retry...");
                     continue;
                 }
-                
-
                 
 
                 // 2. keep calling this primary server to join game until succeed or primary server unavailable
@@ -343,6 +345,7 @@ public class Game implements GameRemote {
                             gameState = primaryPlayerStub.addOtherPlayer(this.myPlayerAddr);    
                         }
                     } catch (Exception e) {
+                        LOGGER.warning("primary server with id: "+ primaryServerAddr.playerID+" uncontactable when joining game");
                         isUncontactable = true;
                     }
 
@@ -355,6 +358,8 @@ public class Game implements GameRemote {
                     if (gameState == null) {
                         // fail because primary doesn't allow you to join
                         // TODO: sleep for some time here
+                        LOGGER.info("primary server doesn't allow join game");
+                        Thread.sleep(SLEEP_PERIOD);
                         continue;
                     }
 
@@ -362,6 +367,8 @@ public class Game implements GameRemote {
                     // and we should update our game state accordingly
                     this.primaryPlayerID = primaryServerAddr.playerID;
                     this.updateGameState(gameState);
+                    joinSucceed = true;
+                    LOGGER.info("join game succeeded");
                 }
             }
 
@@ -489,8 +496,8 @@ public class Game implements GameRemote {
             System.out.println("Wrong number of parameters...exiting");
             System.exit(0);
         }
+        
         Scanner keyboard = new Scanner(System.in);
-        System.out.println("enter an integer");
 
         try {
             Game player = new Game(args[0], args[1], args[2]);
@@ -503,7 +510,7 @@ public class Game implements GameRemote {
                 String nextMove = keyboard.nextLine();
                 player.move(nextMove);
                 if (nextMove == EXIT ){
-
+                    break;
                 }
             }
         } catch (NotBoundException be) {
