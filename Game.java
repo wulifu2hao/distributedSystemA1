@@ -1,3 +1,5 @@
+import java.net.Inet4Address;
+import java.net.UnknownHostException;
 import java.rmi.NotBoundException;
 import java.rmi.Remote;
 import java.util.Hashtable;
@@ -53,6 +55,8 @@ public class Game implements GameRemote {
     Map<String, Integer> playerScores = new Hashtable<>();
     Map<String, PlayerAddr> playerAddrMap = new Hashtable<>();
 
+    private static final int DEFAULT_PORT = 0;
+
     // GUI
     GameInterface gameInterface;
 
@@ -70,9 +74,13 @@ public class Game implements GameRemote {
         Registry registry = LocateRegistry.getRegistry(trackerIP);
         this.trackerStub = (TrackerRemote) registry.lookup("tracker");
 
-        // TODO: init my player address
-        // this.myPlayerAddr = new PlayerAddr()
-        Common.registerGame(this);        
+        String ipAddr = Common.getLocalAddress();
+        if (ipAddr == null) {
+            LOGGER.severe("Cannot get ip address for " + playerID);
+            return;
+        }
+        this.myPlayerAddr = new PlayerAddr(ipAddr, DEFAULT_PORT, playerID);
+        Common.registerGame(this);
         // any other things to init here?
     }
 

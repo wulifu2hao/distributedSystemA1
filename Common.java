@@ -1,3 +1,5 @@
+import java.net.Inet4Address;
+import java.net.UnknownHostException;
 import java.rmi.Remote;
 import java.rmi.registry.Registry;
 import java.rmi.registry.LocateRegistry;
@@ -51,4 +53,12 @@ public class Common {
         return interfaceData;
     }
 
+    public static String getLocalAddress() {
+        try {
+            return Inet4Address.getLocalHost().getHostAddress();
+        } catch (UnknownHostException e) {
+            e.printStackTrace();
+            return null;
+        }
+    }
 }
