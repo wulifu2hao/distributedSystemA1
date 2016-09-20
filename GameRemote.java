@@ -5,7 +5,7 @@ import java.rmi.Remote;
  */
 public interface GameRemote extends Remote {
     // for primary server
-    boolean addOtherPlayer(String playerID, String playerIP, int playerPort);
+    GameState addOtherPlayer(PlayerAddr playerAddr);
     GameState applyPlayerMove(String playerID, String move);
 
     // for backup server

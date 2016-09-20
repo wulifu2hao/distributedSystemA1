@@ -29,21 +29,20 @@ public class Game implements GameRemote {
     public String trackerPort = null;
     TrackerRemote trackerStub = null;
     
-
     // game play related properties
     int N = -1;
     int K = -1;
+    Random rand;
 
     // game administration related properties
     int gameRole = NORMAL; //0 for normal, 1 for backup and 2 for primary
-    public String playerID = null;
+    String playerID = null;
+    PlayerAddr myPlayerAddr;
+
     String primaryPlayerID = "";
     String backupPlayerID = ""  ;
-    PlayerAddr myPlayerAddr;
     
-
-    Random rand;
-
+    
     Map<String, Coord> playerCoordMap = new Hashtable<>();
     String[][] maze = new String[N][N];
     Map<String, Integer> playerScores = new Hashtable<>();
@@ -78,18 +77,18 @@ public class Game implements GameRemote {
     /******   for primary server only  ******/
     // used when other player wants to join the game
     // the param and returned type for this method is not carefully considered yet
-    public boolean addOtherPlayer(String playerID, String playerIP, int playerPort){
+    public GameState addOtherPlayer(PlayerAddr playerAddr){
         // TODO: here the primary server should check whether it is in critical period (promoting new backup server, etc)
         // if yes just give an error and wait for the request to be retried
 
         // if no critical period, just add the player (happy path)
         if (isPlayersFull()) {
-            return false;
+            return null;
         }
-        addPlayerCoord(playerID);
-        addPlayerAddr(playerID, playerIP, playerPort);
+        addPlayerCoord(playerAddr.playerID);
+        addPlayerAddr(playerAddr.playerID, playerAddr.ip_addr, playerAddr.port);
         // TODO: update to backup
-        return true;
+        return null;
     }
 
 
@@ -235,13 +234,18 @@ public class Game implements GameRemote {
         return null;
     }
 
-
-
-
     /******  End of remote method for all players  ******/
 
+    public GameRemote getPlayerStub(PlayerAddr playerAddr) throws RemoteException, NotBoundException{
+        // TODO: if uncontactable, return null
+        String targetPlayerIP = playerAddr.ip_addr;
+        String targetPlayerID = playerAddr.playerID;
+        Registry targetPlayerRegistry = LocateRegistry.getRegistry(targetPlayerID);
+        GameRemote targetPlayerStub = (GameRemote) targetPlayerRegistry.lookup(targetPlayerID);
 
-
+        return targetPlayerStub;
+    }
+;
     public boolean joinGame() throws RemoteException, NotBoundException{
         // try join game till success
         // assume the tracker never fails, it should be able to joingame just by keep retrying
@@ -269,38 +273,43 @@ public class Game implements GameRemote {
             } else {
                 // contact this player to get the primary server contact
 
-                // TODO: handle uncontactable case
-                String targetPlayerIP = response.playerAddr.ip_addr;
-                String targetPlayerID = response.playerAddr.playerID;
-                Registry targetPlayerRegistry = LocateRegistry.getRegistry(targetPlayerID);
-                GameRemote targetPlayerStub = (GameRemote) targetPlayerRegistry.lookup(targetPlayerID);
+                // TODO: handle uncontactable case               
+                GameRemote targetPlayerStub = this.getPlayerStub(response.playerAddr);
+                if (targetPlayerStub == null){
+                    // player uncontactable, retry
+                    continue;
+                }
                 
                 PlayerAddr primaryServerAddr =  targetPlayerStub.getPrimaryServer();
+                // TODO: handle getPrimaryServer failure here
 
+                GameRemote primaryPlayerStub = this.getPlayerStub(primaryServerAddr);
+                if (primaryPlayerStub == null){
+                    // cannot contact primary server
+                    continue;
+                }
                 
-
                 // 2. keep calling this primary server to join game until succeed or primary server unavailable
                 while (true) {
                     // call primaryPlayerID.addOtherPlayer()
                     //   if uncontactable, break this loop and continue the whole thing
                     //   if fail (primary server tells you that you join fail), just retry after some time (0.5s?)
                     //   if succeed, just break the outmost loop
-
-                    // TODO: handle uncontactable case
-                    String primaryPlayerIP = primaryServerAddr.ip_addr;
-                    String primaryPlayerID = primaryServerAddr.playerID;
-                    Registry primaryPlayerRegistry = LocateRegistry.getRegistry(primaryPlayerIP);
-                    GameRemote primaryPlayerStub = (GameRemote) primaryPlayerRegistry.lookup(primaryPlayerID);
-
                     
+                    GameState gameState = primaryPlayerStub.addOtherPlayer(this.myPlayerAddr);
+                    // TODO: handle uncontactable case
+
+                    if (gameState == null) {
+                        // primary is contactable but join game fail
+                        // TODO: sleep and retry
+                    }
 
                     // when succeed, the primary server should returned the most up-to-date game state 
                     // and we should update our game state accordingly
                     this.primaryPlayerID = primaryPlayerID;
-
+                    this.updateGameState(gameState);
+                    joinSucceed = true;
                 }
-
-
             }
 
             if (joinSucceed){
