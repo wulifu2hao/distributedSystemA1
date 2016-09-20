@@ -1,3 +1,4 @@
+import java.rmi.NotBoundException;
 import java.rmi.Remote;
 import java.util.Hashtable;
 import java.util.Map;
@@ -52,7 +53,7 @@ public class Game implements GameRemote {
     GameInterface gameInterface;
     
     // Constructor
-    public Game(String trackerIP, String trackerPort, String playerID) throws RemoteException{
+    public Game(String trackerIP, String trackerPort, String playerID) throws RemoteException, NotBoundException{
         this.trackerIP = trackerIP;
         this.trackerPort = trackerPort;
         this.playerID = playerID;
@@ -241,7 +242,7 @@ public class Game implements GameRemote {
 
 
 
-    public boolean joinGame() {
+    public boolean joinGame() throws RemoteException, NotBoundException{
         // try join game till success
         // assume the tracker never fails, it should be able to joingame just by keep retrying
         while (true) {
@@ -412,9 +413,9 @@ public class Game implements GameRemote {
     private InterfaceData prepareInterfaceData(GameState gameState) {
         InterfaceData interfaceData = new InterfaceData();
         interfaceData.dim = N;
-        interfaceData.playerID = playerID;
         interfaceData.maze = gameState.maze;
         interfaceData.playerScores = gameState.playerScores;
+        return interfaceData;
     }
 
     public static void main(String[] args) {
@@ -423,14 +424,19 @@ public class Game implements GameRemote {
             System.exit(0);
         }
 
-        Game player = new Game(args[0], args[1], args[2]);
-        if (player.joinGame()) {
-            while (true) {
-                String nextMove = readNextMove();
-                player.move(nextMove);
+        try {
+            Game player = new Game(args[0], args[1], args[2]);
+            if (player.joinGame()) {
+                while (true) {
+                    String nextMove = readNextMove();
+                    player.move(nextMove);
+                }
             }
+        } catch (NotBoundException be) {
+            be.printStackTrace();
+        } catch (RemoteException re) {
+            re.printStackTrace();
         }
-
     }
 
 }
