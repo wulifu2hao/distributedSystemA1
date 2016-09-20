@@ -59,6 +59,7 @@ public class Game implements GameRemote {
     // logging
     private final Logger LOGGER = Logger.getLogger("Game");
 
+    private Random rand;
 
     // Constructor
     public Game(String trackerIP, String trackerPort, String playerID) throws RemoteException, NotBoundException{
