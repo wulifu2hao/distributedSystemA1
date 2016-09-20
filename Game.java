@@ -124,6 +124,20 @@ public class Game implements GameRemote {
     }
 
 
+    private GameState applyPlayerExit(String playerID) {
+        Coord coord = playerCoordMap.get(playerID);
+        maze[coord.x][coord.y] = EMPTY;
+        playerAddrMap.remove(playerID);
+        playerCoordMap.remove(playerID);
+        playerScores.remove(playerID);
+        boolean ok = updateBackup();
+        if (!ok){
+            //TODO: thread backup to recover it
+            return null;
+        }
+        return prepareGameState();
+    }
+
     // called by other players to apply a move
     // @return: boolean as update result: true for success
     public GameState applyPlayerMove(String playerID, String move){
@@ -131,14 +145,18 @@ public class Game implements GameRemote {
         Coord coord = playerCoordMap.get(playerID);
         int newx = coord.x, newy = coord.y;
         switch (move){
+            case REFRESH:
+                return prepareGameState();
+            case EXIT:
+                return applyPlayerExit(playerID);
             case MOVE_WEST:
-                newx --;
+                newx --; break;
             case MOVE_SOUTH:
-                newy ++;
+                newy ++; break;
             case MOVE_EAST:
-                newx ++;
+                newx ++; break;
             case MOVE_NORTH:
-                newy --;
+                newy --; break;
         }
         if (newx < 0 || newx >= N || newy < 0 || newy >= N) {
             LOGGER.warning("Illegal move");
@@ -377,10 +395,6 @@ public class Game implements GameRemote {
         }
     }
 
-    private void remoteApplyExit() {
-
-    }
-
     public void move(String nextMove) throws InterruptedException{
         switch (nextMove) {
             case REFRESH:
@@ -416,16 +430,24 @@ public class Game implements GameRemote {
                 while (true) {
                     boolean exitSucceeded = false;
                     switch (this.gameRole){
-                        case 0:
+                        case NORMAL:
                             // call the primary server to exit
                             // if uncontactable, just sleep for a while to get notified the new primary
+                            while (remoteApplyMove(EXIT) == null){
+                                Thread.sleep(SLEEP_PERIOD);
+                                LOGGER.warning("[move] remoteApplyExit fail, retry");
+                            }
                         break;
-                        case 1:
+                        case BACKUP:
                             // call the primary server to exit
                             // if uncontactable, it is likely that the game is undergoing critical period,
                             // just sleep and retry (next time I'm mostly likely to be the primary server)
+                            while (remoteApplyMove(EXIT) == null){
+                                Thread.sleep(SLEEP_PERIOD);
+                                LOGGER.warning("[move] remoteApplyExit fail, retry");
+                            }
                         break;
-                        case 2:
+                        case PRIMARY:
                             // promote the backup server (if not contactable just sleep and retry)
                             // after promotion is successful, exit
                         break;
