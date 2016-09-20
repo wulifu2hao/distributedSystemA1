@@ -7,6 +7,7 @@ import java.util.Random;
 import java.rmi.registry.LocateRegistry;
 import java.rmi.registry.Registry;
 import java.rmi.RemoteException;
+import java.util.logging.Logger;
 
 public class Game implements GameRemote {
 
@@ -50,7 +51,11 @@ public class Game implements GameRemote {
 
     // GUI
     GameInterface gameInterface;
-    
+
+    // logging
+    private final Logger LOGGER = Logger.getLogger("Game");
+
+
     // Constructor
     public Game(String trackerIP, String trackerPort, String playerID) throws RemoteException, NotBoundException{
         this.trackerIP = trackerIP;
@@ -131,6 +136,9 @@ public class Game implements GameRemote {
                 newx ++;
             case MOVE_NORTH:
                 newy --;
+        }
+        if (newx < 0 || newx >= N || newy < 0 || newy >= N) {
+            return null;
         }
         if (!maze[newx][newy].equals(EMPTY) && !maze[newx][newy].equals(TREASURE)) {
             return prepareGameState();
@@ -371,7 +379,7 @@ public class Game implements GameRemote {
                     // call primary server's method to update
                     // playerAddrMap.get(primaryPlayerID)
                     GameState gameState = remoteApplyMove(nextMove);
-                    InterfaceData interfaceData = prepareInterfaceData(gameState);
+                    InterfaceData interfaceData = Common.prepareInterfaceData(gameState);
                     gameInterface.updateInterface(interfaceData);
                     // if error = illegal move, still update the game state then ends
                     // if error is something like primary server uncontactable, then sleep and retry..
@@ -417,13 +425,6 @@ public class Game implements GameRemote {
             default:
                 System.out.println("wrong input for game move");
         }
-    }
-
-    private InterfaceData prepareInterfaceData(GameState gameState) {
-        InterfaceData interfaceData = new InterfaceData();
-        interfaceData.maze = gameState.maze;
-        interfaceData.playerScores = gameState.playerScores;
-        return interfaceData;
     }
 
     public static void main(String[] args) {

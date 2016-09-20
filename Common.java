@@ -43,4 +43,11 @@ public class Common {
             }
         }
     }
+
+    public static InterfaceData prepareInterfaceData(GameState gameState) {
+        InterfaceData interfaceData = new InterfaceData();
+        interfaceData.maze = gameState.maze;
+        interfaceData.playerScores = gameState.playerScores;
+        return interfaceData;
+    }
 }
