@@ -41,6 +41,12 @@ public class Tracker implements TrackerRemote {
         addr_set.remove(playerAddr);
     }
 
+    // TODO: make it synchronous so that only one player will become primary
+    public boolean addPrimaryPlayer(PlayerAddr playerAddr) {
+        return false;
+    }
+
+
     public static void main(String args[]) {
         TrackerRemote remote = null;
         Registry registry = null;

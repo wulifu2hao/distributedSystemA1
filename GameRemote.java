@@ -10,4 +10,7 @@ public interface GameRemote extends Remote {
 
     // for backup server
     void updateGameState(GameState gameState);
+
+    // for all players
+    PlayerAddr getPrimaryServer();
 }

@@ -9,4 +9,6 @@ public interface TrackerRemote extends Remote{
     TrackerResponse getTrackerInfo() throws RemoteException;
     void addPlayerAddr(PlayerAddr playerAddr) throws RemoteException;
     void removePlayerAddr(PlayerAddr playerAddr) throws RemoteException;
+
+    boolean addPrimaryPlayer(PlayerAddr playerAddr) throws RemoteException;
 }

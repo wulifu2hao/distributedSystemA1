@@ -5,6 +5,7 @@ import java.util.Random;
 
 import java.rmi.registry.LocateRegistry;
 import java.rmi.registry.Registry;
+import java.rmi.RemoteException;
 
 public class Game implements GameRemote {
 
@@ -25,17 +26,20 @@ public class Game implements GameRemote {
     // tracker related properties
     public String trackerIP = null;
     public String trackerPort = null;
-    public String playerID = null;
+    TrackerRemote trackerStub = null;
+    
 
     // game play related properties
     int N = -1;
     int K = -1;
-    // player info and gameboard info is needed here
 
     // game administration related properties
     int gameRole = NORMAL; //0 for normal, 1 for backup and 2 for primary
+    public String playerID = null;
     String primaryPlayerID = "";
     String backupPlayerID = ""  ;
+    PlayerAddr myPlayerAddr;
+    
 
     Random rand;
 
@@ -44,16 +48,20 @@ public class Game implements GameRemote {
     Map<String, Integer> playerScores = new Hashtable<>();
     Map<String, PlayerAddr> playerAddrMap = new Hashtable<>();
 
-    public Game(String trackerIP, String trackerPort, String playerID){
+    // Constructor
+    public Game(String trackerIP, String trackerPort, String playerID) throws RemoteException{
         this.trackerIP = trackerIP;
         this.trackerPort = trackerPort;
         this.playerID = playerID;
         this.rand = new Random();
+        
+        Registry registry = LocateRegistry.getRegistry(trackerIP);
+        this.trackerStub = (TrackerRemote) registry.lookup("tracker");
 
-        initTreasures();
+        Common.registerGame(this);
+        // TODO: init my player address
+        // this.myPlayerAddr = new PlayerAddr()
         // any other things to init here?
-        // TODO: init rmi registry here
-
     }
 
     private void initTreasures() {
@@ -93,7 +101,7 @@ public class Game implements GameRemote {
     }
 
     private void addPlayerAddr(String playerID, String ip, int port) {
-        playerAddrMap.put(playerID, new PlayerAddr(ip, port));
+        playerAddrMap.put(playerID, new PlayerAddr(ip, port, playerID));
     }
 
     private Coord getRandEmptyCoord() {
@@ -214,38 +222,58 @@ public class Game implements GameRemote {
         // After it becomes the primary, it should call promoteToBackup to promote another server
     }
 
-
-
-
-
     /******  End of for backup server only  ******/
+
+    /******  remote method for all players  ******/
+
+    public PlayerAddr getPrimaryServer() {
+        // TODO
+        return null;
+    }
+
+
+
+
+    /******  End of remote method for all players  ******/
+
+
 
     public boolean joinGame() {
         // try join game till success
         // assume the tracker never fails, it should be able to joingame just by keep retrying
         while (true) {
             // By calling tracker.GetGameInfo we should get value of N, K and optionally another playerID
+            TrackerResponse response = this.trackerStub.getTrackerInfo();
 
-            // first we'll set this.N and this.K accordingly
-            this.N = 10;
-            this.K = 2+1;
+            this.N = response.dim;
+            this.K = response.treasures_num;            
+            
             boolean joinSucceed = false;
-
             if (playerID == ""){
                 // we will become the primary server!
-                // 1. call tracker.AddPlayer(this.playerID) to add me as a player
+                if (!this.trackerStub.addPrimaryPlayer(this.myPlayerAddr)) {
+                    // fail to become the primary server...
+                    // maybe another player has already become the primary
+                    // ley's retry joingame
+                    continue;
+                }
 
-                // 2. set my gameRole
+                // initialization for primary server
                 this.gameRole = 2;
-
-                // 3. init a game board with players and treasure here
+                initTreasures();
 
             } else {
                 // contact this player to get the primary server contact
 
-                // 1. call playerID's rmi method to get the primary server contact
-                // if this player is uncontactable, break and retry
-                String primaryPlayerID = "TODO";
+                // TODO: handle uncontactable case
+                String targetPlayerIP = response.playerAddr.ip_addr;
+                String targetPlayerID = response.playerAddr.playerID;
+                Registry targetPlayerRegistry = LocateRegistry.getRegistry(targetPlayerID);
+                GameRemote targetPlayerStub = (GameRemote) targetPlayerRegistry.lookup(targetPlayerID);
+                
+                PlayerAddr primaryServerAddr =  targetPlayerStub.getPrimaryServer();
+
+                
 
                 // 2. keep calling this primary server to join game until succeed or primary server unavailable
                 while (true) {
@@ -254,9 +282,17 @@ public class Game implements GameRemote {
                     //   if fail (primary server tells you that you join fail), just retry after some time (0.5s?)
                     //   if succeed, just break the outmost loop
 
+                    // TODO: handle uncontactable case
+                    String primaryPlayerIP = primaryServerAddr.ip_addr;
+                    String primaryPlayerID = primaryServerAddr.playerID;
+                    Registry primaryPlayerRegistry = LocateRegistry.getRegistry(primaryPlayerIP);
+                    GameRemote primaryPlayerStub = (GameRemote) primaryPlayerRegistry.lookup(primaryPlayerID);
+
+                    
+
                     // when succeed, the primary server should returned the most up-to-date game state 
                     // and we should update our game state accordingly
-                    this.primaryPlayerID = "";
+                    this.primaryPlayerID = primaryPlayerID;
 
                 }
 
@@ -307,7 +343,7 @@ public class Game implements GameRemote {
         return null;
     }
 
-    public String move(String nextMove){
+    public void move(String nextMove){
         switch (nextMove) {
             case REFRESH:
             case MOVE_WEST:
