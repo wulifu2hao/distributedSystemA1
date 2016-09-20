@@ -48,6 +48,9 @@ public class Game implements GameRemote {
     Map<String, Integer> playerScores = new Hashtable<>();
     Map<String, PlayerAddr> playerAddrMap = new Hashtable<>();
 
+    // GUI
+    GameInterface gameInterface;
+    
     // Constructor
     public Game(String trackerIP, String trackerPort, String playerID) throws RemoteException{
         this.trackerIP = trackerIP;
@@ -358,7 +361,8 @@ public class Game implements GameRemote {
                     // call primary server's method to update
                     // playerAddrMap.get(primaryPlayerID)
                     GameState gameState = remoteApplyMove(nextMove);
-
+                    InterfaceData interfaceData = prepareInterfaceData(gameState);
+                    gameInterface.updateInterface(interfaceData);
                     // if error = illegal move, still update the game state then ends
                     // if error is something like primary server uncontactable, then sleep and retry..
                 }
@@ -403,6 +407,14 @@ public class Game implements GameRemote {
             default:
                 System.out.println("wrong input for game move");
         }
+    }
+
+    private InterfaceData prepareInterfaceData(GameState gameState) {
+        InterfaceData interfaceData = new InterfaceData();
+        interfaceData.dim = N;
+        interfaceData.playerID = playerID;
+        interfaceData.maze = gameState.maze;
+        interfaceData.playerScores = gameState.playerScores;
     }
 
     public static void main(String[] args) {

@@ -37,25 +37,26 @@ public class GameInterface extends JFrame {
         playerScores.put("xx", 3);
         playerScores.put("zz", 2);
 
+        String playerID = "xx";
         InterfaceData data = new InterfaceData();
-        data.playerID = "xx";
         data.dim = 4;
         data.maze = maze;
         data.playerScores = playerScores;
 
-        JFrame f = new GameInterface(data);
+        JFrame f = new GameInterface(playerID);
         // f.setSize(251,202); // -> set window size explicitly
         f.pack(); // -> causes this window to be sized to fit the preferred size
         // and layouts of its subcomponents.
         f.setVisible(true);
+        ((GameInterface)f).updateInterface(data);
     }
 
     /**
      * GameInterface Creator
      */
-    GameInterface(InterfaceData data) {
+    GameInterface(String playerID) {
 
-        super("PlayerID: " + data.playerID); // -> set title
+        super("PlayerID: " + playerID); // -> set title
 
         this.data = data;
 
@@ -63,10 +64,9 @@ public class GameInterface extends JFrame {
         setDefaultCloseOperation(EXIT_ON_CLOSE); // -> otherwise window will not
         // close
         setLayout(new BorderLayout());
-        drawCenter();
     }
 
-    public void update(InterfaceData data) {
+    public void updateInterface(InterfaceData data) {
         this.data = data;
         drawCenter();
     }
