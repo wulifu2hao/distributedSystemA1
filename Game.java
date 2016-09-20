@@ -252,6 +252,13 @@ public class Game implements GameRemote {
 
     /******  End of remote method for all players  ******/
 
+    GameRemote getPlayerStub(PlayerAddr playerAddr) throws RemoteException, NotBoundException{
+        String targetPlayerIP = playerAddr.ip_addr;
+        String targetPlayerID = playerAddr.playerID;
+        Registry targetPlayerRegistry = LocateRegistry.getRegistry(targetPlayerIP);
+        GameRemote targetPlayerStub = (GameRemote) targetPlayerRegistry.lookup(targetPlayerID);
+        return targetPlayerStub;
+    }
 
 
     public boolean joinGame() throws RemoteException, NotBoundException{
@@ -282,12 +289,21 @@ public class Game implements GameRemote {
                 // contact this player to get the primary server contact
 
                 // TODO: handle uncontactable case
-                String targetPlayerIP = response.playerAddr.ip_addr;
-                String targetPlayerID = response.playerAddr.playerID;
-                Registry targetPlayerRegistry = LocateRegistry.getRegistry(targetPlayerID);
-                GameRemote targetPlayerStub = (GameRemote) targetPlayerRegistry.lookup(targetPlayerID);
+                boolean isUncontactable = false;
+                PlayerAddr primaryServerAddr = null;
+                try {
+                    GameRemote targetPlayerStub = this.getPlayerStub(response.playerAddr);                
+                    if (targetPlayerStub == null){
+                        isUncontactable = true;
+                    } else {
+                        primaryServerAddr =  targetPlayerStub.getPrimaryServer();    
+                    }                    
+                } catch (Exception e) {
+                    isUncontactable = true;
+                }             
+
+
                 
-                PlayerAddr primaryServerAddr =  targetPlayerStub.getPrimaryServer();
 
                 
 
