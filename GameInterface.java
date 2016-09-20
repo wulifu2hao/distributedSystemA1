@@ -39,7 +39,6 @@ public class GameInterface extends JFrame {
 
         String playerID = "xx";
         InterfaceData data = new InterfaceData();
-        data.dim = 4;
         data.maze = maze;
         data.playerScores = playerScores;
 
@@ -72,9 +71,22 @@ public class GameInterface extends JFrame {
     }
 
     private void drawCenter() {
-        int dim = data.dim;
+        int role = data.role;
         String[][] maze = data.maze;
         Map<String, Integer> playerScores = data.playerScores;
+        int dim = maze.length;
+
+        String roleStr = "Normal";
+        switch (role) {
+            case Game.BACKUP:
+                roleStr = "Backup server"; break;
+            case Game.PRIMARY:
+                roleStr = "Primary server"; break;
+        }
+
+        final JLabel roleLabel = new JLabel(roleStr);
+        roleLabel.setBorder(new EmptyBorder(10, 10, 10, 10));
+        add(roleLabel, BorderLayout.NORTH);
 
         /* add center panel with flowlayout */
         center = new JPanel();
