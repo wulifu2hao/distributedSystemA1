@@ -50,4 +50,5 @@ public class Common {
         interfaceData.playerScores = gameState.playerScores;
         return interfaceData;
     }
+
 }
