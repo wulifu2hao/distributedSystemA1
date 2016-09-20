@@ -51,7 +51,7 @@ public class Game implements GameRemote {
     
     // game state
     Map<String, Coord> playerCoordMap = new Hashtable<>();
-    String[][] maze = new String[N][N];
+    String[][] maze;
     Map<String, Integer> playerScores = new Hashtable<>();
     Map<String, PlayerAddr> playerAddrMap = new Hashtable<>();
 
@@ -79,7 +79,10 @@ public class Game implements GameRemote {
             LOGGER.severe("Cannot get ip address for " + playerID);
             return;
         }
-        this.myPlayerAddr = new PlayerAddr(ipAddr, DEFAULT_PORT, playerID);
+        // this.myPlayerAddr = new PlayerAddr(ipAddr, DEFAULT_PORT, playerID);
+        this.myPlayerAddr = new PlayerAddr();
+        this.myPlayerAddr.playerID = playerID;
+        // TODO complete the fields
         Common.registerGame(this);
         // any other things to init here?
     }
@@ -88,6 +91,22 @@ public class Game implements GameRemote {
         for(int i = 0; i < K; i++) {
             generateRandTreasure();
         }
+    }
+
+    private void initGameState(){
+        maze = new String[this.N][this.N];
+        for (int i=0; i<N; i++){
+            for (int j=0; j<N; j++){
+                maze[i][j] = EMPTY;
+            }
+        }
+        initTreasures();
+
+        playerScores.put(myPlayerAddr.playerID, 0);
+        playerAddrMap.put(myPlayerAddr.playerID, myPlayerAddr);
+
+        maze[1][1] = myPlayerAddr.playerID;
+        playerCoordMap.put(myPlayerAddr.playerID, new Coord(1, 1));
     }
 
 
@@ -100,17 +119,24 @@ public class Game implements GameRemote {
 
         // if no critical period, just add the player (happy path)
         if (isPlayersFull()) {
+            LOGGER.info("player is full");
             return null;
         }
+
         addPlayerCoord(playerAddr.playerID);
         addPlayerAddr(playerAddr.playerID, playerAddr.ip_addr, playerAddr.port);
+
+        LOGGER.info("finish adding player "+ playerAddr.playerID+ " to gamestate");
+
+        // TODO: if no backup then use it as backup
+
         // TODO: update to backup
-        return null;
+        return prepareGameState();
     }
 
 
     private boolean isPlayersFull() {
-        return playerCoordMap.size() + K < N * N;
+        return playerCoordMap.size() + K >= N * N;
     }
 
 
@@ -121,7 +147,11 @@ public class Game implements GameRemote {
     }
 
     private void addPlayerAddr(String playerID, String ip, int port) {
-        playerAddrMap.put(playerID, new PlayerAddr(ip, port, playerID));
+        // playerAddrMap.put(playerID, new PlayerAddr(ip, port, playerID));
+        PlayerAddr newPlayer = new PlayerAddr();
+        newPlayer.playerID = playerID;
+        // TODO
+        playerAddrMap.put(playerID, newPlayer);
     }
 
     private Coord getRandEmptyCoord() {
@@ -217,11 +247,13 @@ public class Game implements GameRemote {
 
             GameState gameState = prepareGameState();
             remote.updateGameState(gameState);
+            return true;
         }catch (Exception e) {
             // TODO: customize error handling, for this case: backup fail or something
             Common.handleError(registry, remote, backupPlayerID, e);
+            return false;
         }
-        return false;
+        
     }
 
     private GameState prepareGameState() {
@@ -271,8 +303,10 @@ public class Game implements GameRemote {
     /******  remote method for all players  ******/
 
     public PlayerAddr getPrimaryServer() {
-        // TODO
-        return null;
+        LOGGER.info("getPrimaryServer call");
+        PlayerAddr result = playerAddrMap.get(primaryPlayerID);
+        LOGGER.info("primary server result: " + result.playerID);
+        return result;
     }
 
 
@@ -290,56 +324,64 @@ public class Game implements GameRemote {
 
 
     public boolean joinGame() throws RemoteException, NotBoundException, InterruptedException{
+        LOGGER.info("trying to join game");
         // try join game till success
         // assume the tracker never fails, it should be able to joingame just by keep retrying
         while (true) {
             // By calling tracker.GetGameInfo we should get value of N, K and optionally another playerID
-            TrackerResponse response = this.trackerStub.getTrackerInfo();
+            TrackerResponse response = this.trackerStub.getTrackerInfo();            
 
             this.N = response.dim;
             this.K = response.treasures_num;            
             
             boolean joinSucceed = false;
-            if (this.myPlayerAddr == null){
+            if (response.playerAddr == null){
+                LOGGER.info("trying to join as primary server");
                 // we will become the primary server!
                 if (!this.trackerStub.addPrimaryPlayer(this.myPlayerAddr)) {
                     // fail to become the primary server
                     // maybe another player has already become the primary
                     // ley's retry joingame
+                    LOGGER.info("fail to join as primary server");
                     continue;
                 }
 
                 // initialization for primary server
                 this.gameRole = 2;
-                initTreasures();
+                this.primaryPlayerID = myPlayerAddr.playerID;
+                initGameState();                
+                gameInterface = GameInterface.initGameInterface(myPlayerAddr.playerID, Common.prepareInterfaceData(prepareGameState()));
                 joinSucceed = true;
                 LOGGER.info("join game succeeded");
 
             } else {
                 // contact this player to get the primary server contact
+                LOGGER.info("contacting player " + response.playerAddr.playerID + " to get primary");
 
                 boolean isUncontactable = false;
                 PlayerAddr primaryServerAddr = null;
                 try {
                     GameRemote targetPlayerStub = this.getPlayerStub(response.playerAddr);                
                     if (targetPlayerStub == null){
+                        // LOGGER.warning("get primary player stub fail when joining game");
                         isUncontactable = true;
                     } else {
                         primaryServerAddr =  targetPlayerStub.getPrimaryServer();    
                     }                    
                 } catch (Exception e) {
                     // TODO: log this exception in a simple way
+                    e.printStackTrace();
                     LOGGER.warning("another player with id: "+response.playerAddr.playerID+" uncontactable! " + e);
                     isUncontactable = true;
                 }             
 
                 if (isUncontactable || primaryServerAddr == null) {
                     // retry
-                    LOGGER.info("fail to get primaryServerAddr, retry...");
+                    // LOGGER.info("fail to get primaryServerAddr, retry...");
                     continue;
                 }
                 
-
+                LOGGER.info("successfully obtain primary server contact!");
                 // 2. keep calling this primary server to join game until succeed or primary server unavailable
                 while (true) {
                     // try to ask primary to add me to the game
@@ -371,10 +413,12 @@ public class Game implements GameRemote {
                         continue;
                     }
 
+                    LOGGER.info("successfully allowed to join game by primary server");
                     // when succeed, the primary server should returned the most up-to-date game state 
                     // and we should update our game state accordingly
                     this.primaryPlayerID = primaryServerAddr.playerID;
                     this.updateGameState(gameState);
+                    gameInterface = GameInterface.initGameInterface(myPlayerAddr.playerID, Common.prepareInterfaceData(prepareGameState()));
                     joinSucceed = true;
                     LOGGER.info("join game succeeded");
                 }
@@ -400,7 +444,7 @@ public class Game implements GameRemote {
 
         // 3) become normal player but know how to contact primary server to do move
 
-        return false;
+        return true;
     }
 
 
@@ -431,7 +475,8 @@ public class Game implements GameRemote {
             case MOVE_NORTH:
                 if (this.gameRole == PRIMARY) {
                     // I am the primary server, I can just update my gamestate
-                    this.applyPlayerMove(this.myPlayerAddr.playerID, nextMove);
+                    GameState gameState = this.applyPlayerMove(this.myPlayerAddr.playerID, nextMove);
+                    gameInterface.updateInterface(Common.prepareInterfaceData(gameState));
                 } else {
                     // TODO
                     // call primary server's method to update
@@ -510,10 +555,11 @@ public class Game implements GameRemote {
         try {
             Game player = new Game(args[0], args[1], args[2]);
             // keep retrying joinGame
-            while (!player.joinGame()) {
-                Thread.sleep(SLEEP_PERIOD);
-                System.out.println("[main] join game fail, retry");
+            if (!player.joinGame()){
+                System.out.println("[main] join game fail, exit");
+                System.exit(0);
             }
+
             while (true) {
                 String nextMove = keyboard.nextLine();
                 player.move(nextMove);

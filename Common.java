@@ -8,8 +8,7 @@ import java.rmi.server.UnicastRemoteObject;
 
 public class Common {
     public static void handleError(Registry registry, Remote remote, String tag, Exception e) {
-        System.err.println("Server exception0: " + e.toString());
-        e.printStackTrace();
+        // e.printStackTrace();
         try{
             registry.unbind(tag);
             registry.bind(tag, remote);
@@ -35,7 +34,7 @@ public class Common {
             System.err.println("player "+game.myPlayerAddr.playerID+" ready");
         } catch (Exception e) {
             try{
-                e.printStackTrace();
+                // e.printStackTrace();
                 registry.unbind(game.myPlayerAddr.playerID);
                 registry.bind(game.myPlayerAddr.playerID, stub);
                 System.err.println("player "+game.myPlayerAddr.playerID+" ready");

@@ -30,7 +30,7 @@ public class Tracker implements TrackerRemote {
         }
         resp.dim = dim;
         resp.treasures_num = treasures_num;
-        return null;
+        return resp;
     }
 
     public void addPlayerAddr(PlayerAddr playerAddr) {
@@ -43,18 +43,29 @@ public class Tracker implements TrackerRemote {
 
     // TODO: make it synchronous so that only one player will become primary
     public boolean addPrimaryPlayer(PlayerAddr playerAddr) {
-        return false;
+        addr_set.add(playerAddr);
+        System.out.println("add primary");
+        return true;
     }
 
 
     public static void main(String args[]) {
+        if (args.length != 3) {
+            System.out.println("Wrong number of parameters...exiting");
+            System.exit(0);
+        }
+
+        int port = Integer.parseInt(args[0]);
+        int N = Integer.parseInt(args[1]);
+        int K = Integer.parseInt(args[2]);
+
         TrackerRemote remote = null;
         Registry registry = null;
 
         try {
             // TODO: change the param to args
-            Tracker obj = new Tracker(10, 10);
-            remote = (TrackerRemote) UnicastRemoteObject.exportObject(obj, 0);
+            Tracker obj = new Tracker(N, K);
+            remote = (TrackerRemote) UnicastRemoteObject.exportObject(obj, port);
             registry = LocateRegistry.getRegistry();
             registry.bind(TAG, remote);
             System.out.println("remote: " + remote);
