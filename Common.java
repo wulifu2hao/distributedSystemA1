@@ -28,15 +28,15 @@ public class Common {
             int freeport = 0;
             stub = (GameRemote) UnicastRemoteObject.exportObject(game, freeport);
             registry = LocateRegistry.getRegistry();
-            registry.bind(game.playerID, stub);
+            registry.bind(game.myPlayerAddr.playerID, stub);
 
-            System.err.println("player "+game.playerID+" ready");
+            System.err.println("player "+game.myPlayerAddr.playerID+" ready");
         } catch (Exception e) {
             try{
                 e.printStackTrace();
-                registry.unbind(game.playerID);
-                registry.bind(game.playerID, stub);
-                System.err.println("player "+game.playerID+" ready");
+                registry.unbind(game.myPlayerAddr.playerID);
+                registry.bind(game.myPlayerAddr.playerID, stub);
+                System.err.println("player "+game.myPlayerAddr.playerID+" ready");
             }catch(Exception ee){
                 System.err.println("player exception: " + ee.toString());
                 ee.printStackTrace();

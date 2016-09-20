@@ -85,18 +85,18 @@ public class Game implements GameRemote {
     /******   for primary server only  ******/
     // used when other player wants to join the game
     // the param and returned type for this method is not carefully considered yet
-    public boolean addOtherPlayer(String playerID, String playerIP, int playerPort){
+    public GameState addOtherPlayer(PlayerAddr playerAddr){
         // TODO: here the primary server should check whether it is in critical period (promoting new backup server, etc)
         // if yes just give an error and wait for the request to be retried
 
         // if no critical period, just add the player (happy path)
         if (isPlayersFull()) {
-            return false;
+            return null;
         }
-        addPlayerCoord(playerID);
-        addPlayerAddr(playerID, playerIP, playerPort);
+        addPlayerCoord(playerAddr.playerID);
+        addPlayerAddr(playerAddr.playerID, playerAddr.ip_addr, playerAddr.port);
         // TODO: update to backup
-        return true;
+        return null;
     }
 
 
