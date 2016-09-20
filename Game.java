@@ -42,7 +42,6 @@ public class Game implements GameRemote {
 
     // game administration related properties
     int gameRole = NORMAL; //0 for normal, 1 for backup and 2 for primary
-    public String playerID = null;
     String primaryPlayerID = "";
     String backupPlayerID = ""  ;
     PlayerAddr myPlayerAddr;
