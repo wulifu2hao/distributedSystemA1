@@ -308,7 +308,7 @@ public class Game implements GameRemote {
     //  b) primary exit
     public void promoteSelfToPrimary(){
         // 0. set critical flag
-
+ 
         // 1. update setting to make self primary
 
         // 2. notify other players
@@ -324,6 +324,7 @@ public class Game implements GameRemote {
         // 3. promote another to be backup if possible
 
         // 4. start the primaryHelper thread 
+        (new Thread(new PrimaryHelper(this))).start();
 
         // 5. clear critical flag
     }
