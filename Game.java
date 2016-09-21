@@ -265,12 +265,12 @@ public class Game implements GameRemote {
         return gameState;
     }
 
-    // called by primary server itself to promote a server to backup
+    // called by primary server itself to promote another server to backup
     // this should happens when 
     //  a) there is no backup and one player asks to join
     //  b) backup server exit
     //  c) discover backup is dead while pinging backup
-    public void promoteToBackup(){
+    public void promoteSomeoneToBackup(){
 
     }
 
@@ -327,6 +327,15 @@ public class Game implements GameRemote {
 
     public void ping(){
         return ;
+    }
+
+    // this remote method is called by the actual primary server
+    // it assumes the player has the correct knowledge of the primary server
+    public void promoteSelfToBackup(){
+        // 1. update setting to make self primary
+
+        // 2. start the backupHelper thread 
+        (new Thread(new BackupHelper(this))).start();
     }
 
 

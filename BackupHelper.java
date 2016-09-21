@@ -72,8 +72,4 @@ public class BackupHelper implements Runnable  {
 
 	}
 
-	// public static void main(String args[]) {
- //        (new Thread(new BackupHelper())).start();
- //    }
-
 }
