@@ -132,19 +132,36 @@ public class Game implements GameRemote {
 
         // if no critical period, just add the player (happy path)
         if (isPlayersFull()) {
-            LOGGER.info("player is full");
+            LOGGER.info("[addOtherPlayer] player is full");
             return null;
         }
 
+        addPlayerScore(playerAddr.playerID);
         addPlayerCoord(playerAddr.playerID);
-        addPlayerAddr(playerAddr.playerID, playerAddr.ip_addr, playerAddr.port);
+        addPlayerAddr(playerAddr);
 
-        LOGGER.info("finish adding player "+ playerAddr.playerID+ " to gamestate");
+
+        LOGGER.info("[addOtherPlayer] finish adding player "+ playerAddr.playerID+ " to gamestate");
+
+        GameState gameState = prepareGameState();
+        LOGGER.severe("[addOtherPlayer] after adding playerAddr size: " + playerAddrMap.size());
 
         // TODO: if no backup then use it as backup
+        if (this.playerAddrMap.size() <= 1) {
+            LOGGER.severe("[addOtherPlayer] invalid playerAddrMap size");
+        } else if (this.playerAddrMap.size() == 2) {
+            backupPlayerID = playerAddr.playerID;
+            gameState.isBecomeBackup = true;
+        } else {
+            boolean ok = updateBackup();
+            if (!ok) {
+                LOGGER.warning("update backup fail");
+                // TODO: recover backup
+            }
+        }
 
-        // TODO: update to backup
-        return prepareGameState();
+        udpateGameInterface();
+        return gameState;
     }
 
     // called by other players to apply a move
@@ -183,7 +200,12 @@ public class Game implements GameRemote {
         playerCoordMap.put(playerID, new Coord(newx, newy));
         maze[coord.x][coord.y] = EMPTY;
         maze[newx][newy] = playerID;
-        // TODO: update backup
+        boolean ok = updateBackup();
+        if (!ok) {
+            LOGGER.warning("update backup fail");
+            // TODO: recover backup
+        }
+        udpateGameInterface();
         return prepareGameState();
     }
 
@@ -195,11 +217,15 @@ public class Game implements GameRemote {
     // TODO: currently using playerID as tag, is it correct?
     private boolean updateBackup() {
         // TODO: rpc call backup.updateGameState
+        LOGGER.info("[updateBackup] playersize: " + playerAddrMap.size());
         PlayerAddr backupPlayerAddr = playerAddrMap.get(backupPlayerID);
         Registry registry = null;
         GameRemote remote = null;
         try {
             registry = LocateRegistry.getRegistry(backupPlayerAddr.ip_addr, backupPlayerAddr.port);
+            if (registry == null ){
+                return false;
+            }
             remote = (GameRemote) registry.lookup(backupPlayerID);
 
             GameState gameState = prepareGameState();
@@ -208,6 +234,7 @@ public class Game implements GameRemote {
         }catch (Exception e) {
             // TODO: customize error handling, for this case: backup fail or something
             Common.handleError(registry, remote, backupPlayerID, e);
+            LOGGER.warning("update backup fail. Error: "+e);
             return false;
         }
         
@@ -246,10 +273,15 @@ public class Game implements GameRemote {
     /******  for backup server only  ******/
     // called by primary server to update backup server state
     public void updateGameState(GameState gameState){
+        LOGGER.info("[updateGameState] update player size: " + gameState.playerAddrMap.size());
         maze = gameState.maze;
         playerCoordMap = gameState.playerCoordMap;
         playerScores = gameState.playerScores;
         playerAddrMap = gameState.playerAddrMap;
+        if (gameState.isBecomeBackup) {
+            promoteSelfToBackup();
+        }
+        udpateGameInterface();
     }
 
     // promote self to become primary and notify other nodes
@@ -297,10 +329,11 @@ public class Game implements GameRemote {
     // this remote method is called by the actual primary server
     // it assumes the player has the correct knowledge of the primary server
     public void promoteSelfToBackup(){
+        gameRole = BACKUP;
         // 1. update setting to make self primary
 
         // 2. start the backupHelper thread 
-        (new Thread(new BackupHelper(this))).start();
+//        (new Thread(new BackupHelper(this))).start();
     }
 
 
@@ -343,7 +376,6 @@ public class Game implements GameRemote {
                 this.gameRole = PRIMARY;
                 this.primaryPlayerID = myPlayerAddr.playerID;
                 initGameState();                
-                gameInterface = GameInterface.initGameInterface(myPlayerAddr.playerID, Common.prepareInterfaceData(prepareGameState()));
                 joinSucceed = true;
                 LOGGER.info("join game succeeded");
 
@@ -360,6 +392,7 @@ public class Game implements GameRemote {
             }
 
             if (joinSucceed){
+                gameInterface = GameInterface.initGameInterface(myPlayerAddr.playerID, Common.prepareInterfaceData(prepareGameState(), gameRole));
                 break;
             }
 
@@ -450,7 +483,6 @@ public class Game implements GameRemote {
             // update game state
             this.primaryPlayerID = primaryServerAddr.playerID;
             this.updateGameState(gameState);
-            gameInterface = GameInterface.initGameInterface(myPlayerAddr.playerID, Common.prepareInterfaceData(prepareGameState()));
             LOGGER.info("join game succeeded");
             return true;
         }
@@ -483,7 +515,7 @@ public class Game implements GameRemote {
                 if (this.gameRole == PRIMARY) {
                     // I am the primary server, I can just update my gamestate
                     GameState gameState = this.applyPlayerMove(this.myPlayerAddr.playerID, nextMove);
-                    gameInterface.updateInterface(Common.prepareInterfaceData(gameState));
+                    gameInterface.updateInterface(Common.prepareInterfaceData(gameState, gameRole));
                 } else {
                     // TODO
                     // call primary server's method to update
@@ -497,7 +529,7 @@ public class Game implements GameRemote {
                         gameState = remoteApplyMove(nextMove);
                         LOGGER.warning("[move] remoteApplyMove gameState = NULL, retry");
                     }
-                    InterfaceData interfaceData = Common.prepareInterfaceData(gameState);
+                    InterfaceData interfaceData = Common.prepareInterfaceData(gameState, gameRole);
                     gameInterface.updateInterface(interfaceData);
                 }
 
@@ -584,6 +616,13 @@ public class Game implements GameRemote {
     }
 
     /******* auxiliary *******/
+
+    private void udpateGameInterface() {
+        if (gameInterface != null ) {
+            gameInterface.updateInterface(Common.prepareInterfaceData(prepareGameState(), gameRole));
+        }
+    }
+
     private GameState applyPlayerExit(String playerID) {
         Coord coord = playerCoordMap.get(playerID);
         maze[coord.x][coord.y] = EMPTY;
@@ -598,20 +637,18 @@ public class Game implements GameRemote {
         return prepareGameState();
     }
 
+    private void addPlayerScore(String playerID) {
+        playerScores.put(playerID, 0);
+    }
+
     private void addPlayerCoord(String playerID) {
         Coord emptyCoord = getRandEmptyCoord();
         playerCoordMap.put(playerID, emptyCoord);
         maze[emptyCoord.x][emptyCoord.y] = playerID;
     }
 
-    private void addPlayerAddr(String playerID, String ip, int port) {
-        // playerAddrMap.put(playerID, new PlayerAddr(ip, port, playerID));
-        PlayerAddr newPlayer = new PlayerAddr(ip, port, playerID);
-        newPlayer.playerID = playerID;
-        newPlayer.ip_addr = ip;
-        newPlayer.port = port;
-        // TODO
-        playerAddrMap.put(playerID, newPlayer);
+    private void addPlayerAddr(PlayerAddr playerAddr) {
+        playerAddrMap.put(playerAddr.playerID, playerAddr);
     }
 
     private GameState prepareGameState() {

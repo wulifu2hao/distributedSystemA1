@@ -9,4 +9,5 @@ public class GameState implements java.io.Serializable {
     public String[][] maze;
     public Map<String, Integer> playerScores;
     public Map<String, PlayerAddr> playerAddrMap;
+    boolean isBecomeBackup;
 }

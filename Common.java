@@ -45,10 +45,11 @@ public class Common {
         }
     }
 
-    public static InterfaceData prepareInterfaceData(GameState gameState) {
+    public static InterfaceData prepareInterfaceData(GameState gameState, int role) {
         InterfaceData interfaceData = new InterfaceData();
         interfaceData.maze = gameState.maze;
         interfaceData.playerScores = gameState.playerScores;
+        interfaceData.role = role;
         return interfaceData;
     }
 
