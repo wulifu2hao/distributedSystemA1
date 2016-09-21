@@ -52,9 +52,7 @@ public class GameInterface extends JFrame {
 
     public static GameInterface initGameInterface(String playerID, InterfaceData data) {
         GameInterface f = new GameInterface(playerID);
-        // f.setSize(251,202); // set window size explicitly
-        f.pack(); // -> causes this window to be sized to fit the preferred size
-        // and layouts of its subcomponents.
+        f.setSize(251,202);
         f.setVisible(true);
         f.updateInterface(data);
         return f;
@@ -74,6 +72,7 @@ public class GameInterface extends JFrame {
     public void updateInterface(InterfaceData data) {
         this.data = data;
         drawCenter();
+        setVisible(true);
     }
 
     private void drawCenter() {
@@ -124,6 +123,5 @@ public class GameInterface extends JFrame {
             JLabel block = new JLabel(entry.getKey() + ": " + entry.getValue());
             centerright.add(block);
         }
-        setVisible(true);
     }
 }

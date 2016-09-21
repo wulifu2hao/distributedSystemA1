@@ -1,3 +1,4 @@
+import java.io.Serializable;
 import java.net.Inet4Address;
 import java.net.UnknownHostException;
 import java.rmi.NotBoundException;
@@ -112,8 +113,8 @@ public class Game implements GameRemote {
             LOGGER.severe("Cannot get ip address for " + playerID);
             return;
         }
-        // this.myPlayerAddr = new PlayerAddr(ipAddr, DEFAULT_PORT, playerID);
-        this.myPlayerAddr = new PlayerAddr();
+         this.myPlayerAddr = new PlayerAddr(ipAddr, DEFAULT_PORT, playerID);
+//        this.myPlayerAddr = new PlayerAddr();
         this.myPlayerAddr.playerID = playerID;
         // TODO complete the fields
         Common.registerGame(this);
@@ -347,73 +348,15 @@ public class Game implements GameRemote {
                 LOGGER.info("join game succeeded");
 
             } else {
-                // contact this player to get the primary server contact
-                LOGGER.info("contacting player " + response.playerAddr.playerID + " to get primary");
 
-                boolean isUncontactable = false;
-                PlayerAddr primaryServerAddr = null;
-                try {
-                    GameRemote targetPlayerStub = this.getPlayerStub(response.playerAddr);                
-                    if (targetPlayerStub == null){
-                        // LOGGER.warning("get primary player stub fail when joining game");
-                        isUncontactable = true;
-                    } else {
-                        primaryServerAddr =  targetPlayerStub.getPrimaryServer();    
-                    }                    
-                } catch (Exception e) {
-                    // TODO: log this exception in a simple way
-                    e.printStackTrace();
-                    LOGGER.warning("another player with id: "+response.playerAddr.playerID+" uncontactable! " + e);
-                    isUncontactable = true;
-                }             
-
-                if (isUncontactable || primaryServerAddr == null) {
-                    // retry
-                    // LOGGER.info("fail to get primaryServerAddr, retry...");
+                PlayerAddr primaryServerAddr = contactPlayer(response.playerAddr);
+                if (primaryServerAddr == null){
                     continue;
                 }
-                
+
                 LOGGER.info("successfully obtain primary server contact!");
                 // 2. keep calling this primary server to join game until succeed or primary server unavailable
-                while (true) {
-                    // try to ask primary to add me to the game
-                    isUncontactable = false;
-                    GameState gameState = null;
-                    try{
-                        GameRemote primaryPlayerStub = this.getPlayerStub(primaryServerAddr);
-                        if (primaryPlayerStub == null) {
-                            isUncontactable = true;
-                        } else {
-                            gameState = primaryPlayerStub.addOtherPlayer(this.myPlayerAddr);    
-                        }
-                    } catch (Exception e) {
-                        LOGGER.warning("primary server with id: "+ primaryServerAddr.playerID+" uncontactable when joining game");
-                        isUncontactable = true;
-                    }
-
-                    if (isUncontactable) {
-                        // fail because primary not contactable
-                        // break this loop and continue the whole thing
-                        break;
-                    }
-
-                    if (gameState == null) {
-                        // fail because primary doesn't allow you to join
-                        // TODO: sleep for some time here
-                        LOGGER.info("primary server doesn't allow join game");
-                        Thread.sleep(SLEEP_PERIOD);
-                        continue;
-                    }
-
-                    LOGGER.info("successfully allowed to join game by primary server");
-                    // when succeed, the primary server should returned the most up-to-date game state 
-                    // and we should update our game state accordingly
-                    this.primaryPlayerID = primaryServerAddr.playerID;
-                    this.updateGameState(gameState);
-                    gameInterface = GameInterface.initGameInterface(myPlayerAddr.playerID, Common.prepareInterfaceData(prepareGameState()));
-                    joinSucceed = true;
-                    LOGGER.info("join game succeeded");
-                }
+                joinSucceed = tryJoinPrimary(primaryServerAddr);
             }
 
             if (joinSucceed){
@@ -439,7 +382,79 @@ public class Game implements GameRemote {
         return true;
     }
 
+    private PlayerAddr contactPlayer(PlayerAddr playerAddr) throws RemoteException {
+        // contact this player to get the primary server contact
+        LOGGER.info("contacting player " + playerAddr.playerID + " to get primary");
 
+        boolean isUncontactable = false;
+        PlayerAddr primaryServerAddr = null;
+        try {
+            GameRemote targetPlayerStub = this.getPlayerStub(playerAddr);
+            if (targetPlayerStub == null){
+                // LOGGER.warning("get primary player stub fail when joining game");
+                isUncontactable = true;
+            } else {
+                primaryServerAddr =  targetPlayerStub.getPrimaryServer();
+            }
+        } catch (Exception e) {
+            // TODO: log this exception in a simple way
+//            e.printStackTrace();
+            LOGGER.warning("another player with id: "+ playerAddr.playerID+" uncontactable! " + e);
+            isUncontactable = true;
+        }
+
+        if (isUncontactable) {
+            LOGGER.info("fail to contact the contact player, retry...");
+            trackerStub.removePlayerAddr(playerAddr);
+            return null;
+        }
+        if (primaryServerAddr == null) {
+            LOGGER.info("get primaryServerAddr null, retry...");
+            return null;
+        }
+        return primaryServerAddr;
+    }
+
+    private boolean tryJoinPrimary(PlayerAddr primaryServerAddr) throws InterruptedException{
+        // 2. keep calling this primary server to join game until succeed or primary server unavailable
+        while (true) {
+            // try to ask primary to add me to the game
+            boolean isUncontactable = false;
+            GameState gameState = null;
+            try{
+                GameRemote primaryPlayerStub = this.getPlayerStub(primaryServerAddr);
+                if (primaryPlayerStub == null) {
+                    isUncontactable = true;
+                } else {
+                    gameState = primaryPlayerStub.addOtherPlayer(this.myPlayerAddr);
+                }
+            } catch (Exception e) {
+                LOGGER.warning("[tryJoinPrimary] primary server with id: "+ primaryServerAddr.playerID+" not contactable. Error: " + e);
+                isUncontactable = true;
+            }
+
+            if (isUncontactable) {
+                // fail because primary not contactable
+                // break this loop and continue the whole thing
+                return false;
+            }
+
+            if (gameState == null) {
+                // fail because primary doesn't allow you to join -> sleep and then continue
+                LOGGER.info("primary server doesn't allow join game");
+                Thread.sleep(SLEEP_PERIOD);
+                continue;
+            }
+
+            LOGGER.info("successfully allowed to join game by primary server");
+            // update game state
+            this.primaryPlayerID = primaryServerAddr.playerID;
+            this.updateGameState(gameState);
+            gameInterface = GameInterface.initGameInterface(myPlayerAddr.playerID, Common.prepareInterfaceData(prepareGameState()));
+            LOGGER.info("join game succeeded");
+            return true;
+        }
+    }
 
     private GameState remoteApplyMove(String nextMove) {
         PlayerAddr primaryPlayerAddr = playerAddrMap.get(primaryPlayerID);
@@ -591,8 +606,10 @@ public class Game implements GameRemote {
 
     private void addPlayerAddr(String playerID, String ip, int port) {
         // playerAddrMap.put(playerID, new PlayerAddr(ip, port, playerID));
-        PlayerAddr newPlayer = new PlayerAddr();
+        PlayerAddr newPlayer = new PlayerAddr(ip, port, playerID);
         newPlayer.playerID = playerID;
+        newPlayer.ip_addr = ip;
+        newPlayer.port = port;
         // TODO
         playerAddrMap.put(playerID, newPlayer);
     }
@@ -635,7 +652,7 @@ public class Game implements GameRemote {
 
 }
 
-class Coord {
+class Coord implements Serializable{
     public int x;
     public int y;
     public Coord(int x, int y) {
