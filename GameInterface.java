@@ -43,8 +43,8 @@ public class GameInterface extends JFrame {
         data.playerScores = playerScores;
 
         JFrame f = new GameInterface(playerID);
-        // f.setSize(251,202); // -> set window size explicitly
-        f.pack(); // -> causes this window to be sized to fit the preferred size
+        f.setSize(251,202); // -> set window size explicitly
+//        f.pack(); // -> causes this window to be sized to fit the preferred size
         // and layouts of its subcomponents.
         f.setVisible(true);
         ((GameInterface)f).updateInterface(data);
@@ -52,7 +52,7 @@ public class GameInterface extends JFrame {
 
     public static GameInterface initGameInterface(String playerID, InterfaceData data) {
         GameInterface f = new GameInterface(playerID);
-        // f.setSize(251,202); // -> set window size explicitly
+        // f.setSize(251,202); // set window size explicitly
         f.pack(); // -> causes this window to be sized to fit the preferred size
         // and layouts of its subcomponents.
         f.setVisible(true);
@@ -65,14 +65,9 @@ public class GameInterface extends JFrame {
      */
     GameInterface(String playerID) {
 
-        super("PlayerID: " + playerID); // -> set title
-
-        this.data = data;
-
-		/* init frame */
-		LOGGER.info("init Game Interface");
-        setDefaultCloseOperation(EXIT_ON_CLOSE); // -> otherwise window will not
-        // close
+        super("PlayerID: " + playerID); // set title
+        LOGGER.info("init Game Interface");
+        setDefaultCloseOperation(EXIT_ON_CLOSE); // otherwise window will not close
         setLayout(new BorderLayout());
     }
 
@@ -84,8 +79,8 @@ public class GameInterface extends JFrame {
     private void drawCenter() {
         int role = data.role;
         String[][] maze = data.maze;
-        Map<String, Integer> playerScores = data.playerScores;
         int dim = maze.length;
+        Map<String, Integer> playerScores = data.playerScores;
 
         String roleStr = "Normal";
         switch (role) {
@@ -129,5 +124,6 @@ public class GameInterface extends JFrame {
             JLabel block = new JLabel(entry.getKey() + ": " + entry.getValue());
             centerright.add(block);
         }
+        setVisible(true);
     }
 }

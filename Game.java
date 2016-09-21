@@ -65,6 +65,39 @@ public class Game implements GameRemote {
 
     private Random rand;
 
+    public static void main(String[] args) {
+        if (args.length != 3) {
+            System.out.println("Wrong number of parameters...exiting");
+            System.exit(0);
+        }
+
+        Scanner keyboard = new Scanner(System.in);
+
+        try {
+            Game player = new Game(args[0], args[1], args[2]);
+            // keep retrying joinGame
+            if (!player.joinGame()){
+                System.out.println("[main] join game fail, exit");
+                System.exit(0);
+            }
+
+            while (true) {
+                String nextMove = keyboard.nextLine();
+                player.move(nextMove);
+                if (nextMove == EXIT ){
+                    break;
+                }
+            }
+        } catch (NotBoundException be) {
+            be.printStackTrace();
+        } catch (RemoteException re) {
+            re.printStackTrace();
+        } catch (InterruptedException ie) {
+            System.out.println(ie);
+            Thread.currentThread().interrupt();
+        }
+    }
+
     // Constructor
     public Game(String trackerIP, String trackerPort, String playerID) throws RemoteException, NotBoundException{
         this.trackerIP = trackerIP;
@@ -87,27 +120,6 @@ public class Game implements GameRemote {
         // any other things to init here?
     }
 
-    private void initTreasures() {
-        for(int i = 0; i < K; i++) {
-            generateRandTreasure();
-        }
-    }
-
-    private void initGameState(){
-        maze = new String[this.N][this.N];
-        for (int i=0; i<N; i++){
-            for (int j=0; j<N; j++){
-                maze[i][j] = EMPTY;
-            }
-        }
-        initTreasures();
-
-        playerScores.put(myPlayerAddr.playerID, 0);
-        playerAddrMap.put(myPlayerAddr.playerID, myPlayerAddr);
-
-        maze[1][1] = myPlayerAddr.playerID;
-        playerCoordMap.put(myPlayerAddr.playerID, new Coord(1, 1));
-    }
 
 
     /******   for primary server only  ******/
@@ -133,50 +145,6 @@ public class Game implements GameRemote {
         // TODO: update to backup
         return prepareGameState();
     }
-
-
-    private boolean isPlayersFull() {
-        return playerCoordMap.size() + K >= N * N;
-    }
-
-
-    private void addPlayerCoord(String playerID) {
-        Coord emptyCoord = getRandEmptyCoord();
-        playerCoordMap.put(playerID, emptyCoord);
-        maze[emptyCoord.x][emptyCoord.y] = playerID;
-    }
-
-    private void addPlayerAddr(String playerID, String ip, int port) {
-        // playerAddrMap.put(playerID, new PlayerAddr(ip, port, playerID));
-        PlayerAddr newPlayer = new PlayerAddr();
-        newPlayer.playerID = playerID;
-        // TODO
-        playerAddrMap.put(playerID, newPlayer);
-    }
-
-    private Coord getRandEmptyCoord() {
-        Coord coord;
-        do {
-            coord = new Coord(rand.nextInt(N), rand.nextInt(N));
-        } while (!maze[coord.x][coord.y].equals(EMPTY));
-        return coord;
-    }
-
-
-    private GameState applyPlayerExit(String playerID) {
-        Coord coord = playerCoordMap.get(playerID);
-        maze[coord.x][coord.y] = EMPTY;
-        playerAddrMap.remove(playerID);
-        playerCoordMap.remove(playerID);
-        playerScores.remove(playerID);
-        boolean ok = updateBackup();
-        if (!ok){
-            //TODO: thread backup to recover it
-            return null;
-        }
-        return prepareGameState();
-    }
-
 
     // called by other players to apply a move
     // @return: boolean as update result: true for success
@@ -218,19 +186,7 @@ public class Game implements GameRemote {
         return prepareGameState();
     }
 
-    private void generateRandTreasure() {
-        Coord emptyCoord = getRandEmptyCoord();
-        maze[emptyCoord.x][emptyCoord.y] = TREASURE;
-        LOGGER.fine("generate treasure at " + emptyCoord.x + " : " + emptyCoord.y);
-    }
 
-    private void incrPlayerScore(String playerID) {
-        if (!playerScores.containsKey(playerID)) {
-            playerScores.put(playerID, 1);
-        } else {
-            playerScores.put(playerID, playerScores.get(playerID) + 1);
-        }
-    }
 
     // synchronize with backup with all the game state data
     // need to consider and handle the scenario when the backup is failed
@@ -256,14 +212,7 @@ public class Game implements GameRemote {
         
     }
 
-    private GameState prepareGameState() {
-        GameState gameState = new GameState();
-        gameState.playerCoordMap = playerCoordMap;
-        gameState.maze = maze;
-        gameState.playerScores = playerScores;
-        gameState.playerAddrMap = playerAddrMap;
-        return gameState;
-    }
+
 
     // called by primary server itself to promote another server to backup
     // this should happens when 
@@ -390,7 +339,7 @@ public class Game implements GameRemote {
                 }
 
                 // initialization for primary server
-                this.gameRole = 2;
+                this.gameRole = PRIMARY;
                 this.primaryPlayerID = myPlayerAddr.playerID;
                 initGameState();                
                 gameInterface = GameInterface.initGameInterface(myPlayerAddr.playerID, Common.prepareInterfaceData(prepareGameState()));
@@ -587,38 +536,102 @@ public class Game implements GameRemote {
         }
     }
 
-    public static void main(String[] args) {
-        if (args.length != 3) {
-            System.out.println("Wrong number of parameters...exiting");
-            System.exit(0);
-        }
-        
-        Scanner keyboard = new Scanner(System.in);
 
-        try {
-            Game player = new Game(args[0], args[1], args[2]);
-            // keep retrying joinGame
-            if (!player.joinGame()){
-                System.out.println("[main] join game fail, exit");
-                System.exit(0);
-            }
 
-            while (true) {
-                String nextMove = keyboard.nextLine();
-                player.move(nextMove);
-                if (nextMove == EXIT ){
-                    break;
-                }
-            }
-        } catch (NotBoundException be) {
-            be.printStackTrace();
-        } catch (RemoteException re) {
-            re.printStackTrace();
-        } catch (InterruptedException ie) {
-            System.out.println(ie);
-            Thread.currentThread().interrupt();
+    /********** init ************/
+    private void initTreasures() {
+        for(int i = 0; i < K; i++) {
+            generateRandTreasure();
         }
     }
+
+    private void initMaze() {
+        maze = new String[this.N][this.N];
+        for (int i=0; i<N; i++){
+            for (int j=0; j<N; j++){
+                maze[i][j] = EMPTY;
+            }
+        }
+    }
+
+    private void initPlayerData() {
+        Coord emptyCoord = getRandEmptyCoord();
+        maze[emptyCoord.x][emptyCoord.y] = myPlayerAddr.playerID;
+        playerCoordMap.put(myPlayerAddr.playerID, emptyCoord);
+        playerScores.put(myPlayerAddr.playerID, 0);
+        playerAddrMap.put(myPlayerAddr.playerID, myPlayerAddr);
+    }
+
+    private void initGameState(){
+        initMaze();
+        initTreasures();
+        initPlayerData();
+    }
+
+    /******* auxiliary *******/
+    private GameState applyPlayerExit(String playerID) {
+        Coord coord = playerCoordMap.get(playerID);
+        maze[coord.x][coord.y] = EMPTY;
+        playerAddrMap.remove(playerID);
+        playerCoordMap.remove(playerID);
+        playerScores.remove(playerID);
+        boolean ok = updateBackup();
+        if (!ok){
+            //TODO: thread backup to recover it
+            return null;
+        }
+        return prepareGameState();
+    }
+
+    private void addPlayerCoord(String playerID) {
+        Coord emptyCoord = getRandEmptyCoord();
+        playerCoordMap.put(playerID, emptyCoord);
+        maze[emptyCoord.x][emptyCoord.y] = playerID;
+    }
+
+    private void addPlayerAddr(String playerID, String ip, int port) {
+        // playerAddrMap.put(playerID, new PlayerAddr(ip, port, playerID));
+        PlayerAddr newPlayer = new PlayerAddr();
+        newPlayer.playerID = playerID;
+        // TODO
+        playerAddrMap.put(playerID, newPlayer);
+    }
+
+    private GameState prepareGameState() {
+        GameState gameState = new GameState();
+        gameState.playerCoordMap = playerCoordMap;
+        gameState.maze = maze;
+        gameState.playerScores = playerScores;
+        gameState.playerAddrMap = playerAddrMap;
+        return gameState;
+    }
+
+    private Coord getRandEmptyCoord() {
+        Coord coord;
+        do {
+            coord = new Coord(rand.nextInt(N), rand.nextInt(N));
+        } while (!maze[coord.x][coord.y].equals(EMPTY));
+        return coord;
+    }
+
+    private void generateRandTreasure() {
+        Coord emptyCoord = getRandEmptyCoord();
+        maze[emptyCoord.x][emptyCoord.y] = TREASURE;
+        LOGGER.fine("generate treasure at " + emptyCoord.x + " : " + emptyCoord.y);
+    }
+
+    private void incrPlayerScore(String playerID) {
+        if (!playerScores.containsKey(playerID)) {
+            playerScores.put(playerID, 1);
+        } else {
+            playerScores.put(playerID, playerScores.get(playerID) + 1);
+        }
+    }
+
+    private boolean isPlayersFull() {
+        return playerCoordMap.size() + K >= N * N;
+    }
+
 
 }
 
