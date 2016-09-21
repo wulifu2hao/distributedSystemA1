@@ -271,7 +271,21 @@ public class Game implements GameRemote {
     //  b) backup server exit
     //  c) discover backup is dead while pinging backup
     public void promoteSomeoneToBackup(){
+        // TODO: remember to set critical flag here
 
+        // since we want to promote someone to backup, 
+        // there must be no current backup OR current backup fails
+        // let's set current backup to empty anyway
+        this.backupPlayerID = "";
+
+        // TODO: find somebody to promote to backup
+    }
+
+    // this method is used by the primary server (not remote call)
+    // to remove a player from both game state and tracker
+    // TODO: implement this method
+    public void forceRemovePlayer(String playerID){
+        // this method should be able to make use of method applyPlayerExit
     }
 
     /******  End of for primary server only  ******/

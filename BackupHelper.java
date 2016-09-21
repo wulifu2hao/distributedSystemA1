@@ -3,6 +3,8 @@ import java.util.logging.Logger;
 public class BackupHelper implements Runnable  {
 	private static final int SLEEP_PERIOD = 100;	
 
+	// TODO: any place that access backupPlayer may have concurrent access issue.
+	// think about how to solve it
 	Game backupPlayer;
 
 	private final Logger LOGGER = Logger.getLogger("BackupHelper");
@@ -22,6 +24,9 @@ public class BackupHelper implements Runnable  {
 				// TODO: log it
 			}	
 
+			// TODO: using remote call to detect self dead may be wrong!
+			// 		 since helper is only a thread, 
+			// 		 maybe we don't even have to worry about this?
 		    boolean backupUncontactable = false;
 		    try {		    	
                 GameRemote backupPlayerStub = backupPlayer.getPlayerStub(backupPlayer.myPlayerAddr);                
