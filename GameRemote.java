@@ -14,4 +14,5 @@ public interface GameRemote extends Remote {
 
     // for all players
     PlayerAddr getPrimaryServer() throws RemoteException;
+ 	void ping() throws RemoteException;
 }

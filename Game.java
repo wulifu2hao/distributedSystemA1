@@ -293,9 +293,25 @@ public class Game implements GameRemote {
     //  a) discover primary dead when pinging primary
     //  b) primary exit
     public void promoteSelfToPrimary(){
+        // 0. set critical flag
 
-        // remember to kill the backup thread and start a primary thread
-        // After it becomes the primary, it should call promoteToBackup to promote another server
+        // 1. update setting to make self primary
+
+        // 2. notify other players
+        // note: 
+        //  a) if the original primary crashes, 
+        //     then we just found that we fail to update it, it should be ok
+        //  b) if he asks for exit, and has not really exited yet, will it be a problem?
+
+        // 2.5 from the result of notifying other players
+        //     we know who are dead and should remove them from tracker
+        //     this should at least help us removing the crashed primary server
+        
+        // 3. promote another to be backup if possible
+
+        // 4. start the primaryHelper thread 
+
+        // 5. clear critical flag
     }
 
     /******  End of for backup server only  ******/
@@ -309,6 +325,9 @@ public class Game implements GameRemote {
         return result;
     }
 
+    public void ping(){
+        return ;
+    }
 
 
 
