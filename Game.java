@@ -113,12 +113,10 @@ public class Game implements GameRemote {
             LOGGER.severe("Cannot get ip address for " + playerID);
             return;
         }
-         this.myPlayerAddr = new PlayerAddr(ipAddr, DEFAULT_PORT, playerID);
-//        this.myPlayerAddr = new PlayerAddr();
+        this.myPlayerAddr = new PlayerAddr(ipAddr, DEFAULT_PORT, playerID);
         this.myPlayerAddr.playerID = playerID;
-        // TODO complete the fields
         Common.registerGame(this);
-        // any other things to init here?
+        // TODO: any other things to init here?
     }
 
 
@@ -150,6 +148,9 @@ public class Game implements GameRemote {
         if (this.playerAddrMap.size() <= 1) {
             LOGGER.severe("[addOtherPlayer] invalid playerAddrMap size");
         } else if (this.playerAddrMap.size() == 2) {
+            // TODO: this is one of the place that "promote a player to backup"
+            //       but the difference is that the player has not finished joining the game.
+            //       shall we distinguish this case with other promoting to backup cases?
             backupPlayerID = playerAddr.playerID;
             gameState.isBecomeBackup = true;
         } else {
@@ -165,7 +166,7 @@ public class Game implements GameRemote {
     }
 
     // called by other players to apply a move
-    // @return: boolean as update result: true for success
+    // @return: GameState as update result
     public GameState applyPlayerMove(String playerID, String move){
         // the actual game logic goes here
         Coord coord = playerCoordMap.get(playerID);
@@ -233,6 +234,8 @@ public class Game implements GameRemote {
             return true;
         }catch (Exception e) {
             // TODO: customize error handling, for this case: backup fail or something
+            // TODO: I think using handleError is problematic
+            //       because if backup has failed, we should not rebind its tag!
             Common.handleError(registry, remote, backupPlayerID, e);
             LOGGER.warning("update backup fail. Error: "+e);
             return false;
@@ -279,6 +282,8 @@ public class Game implements GameRemote {
         playerScores = gameState.playerScores;
         playerAddrMap = gameState.playerAddrMap;
         if (gameState.isBecomeBackup) {
+            // TODO: does this mean's that this method is not only for backup server 
+            // but also for all normal players?
             promoteSelfToBackup();
         }
         udpateGameInterface();
@@ -517,10 +522,6 @@ public class Game implements GameRemote {
                     GameState gameState = this.applyPlayerMove(this.myPlayerAddr.playerID, nextMove);
                     gameInterface.updateInterface(Common.prepareInterfaceData(gameState, gameRole));
                 } else {
-                    // TODO
-                    // call primary server's method to update
-                    // playerAddrMap.get(primaryPlayerID)
-                    // if error = illegal move, still update the game state then ends
                     GameState gameState = remoteApplyMove(nextMove);
 
                     // if error is something like primary server uncontactable, then sleep and retry..
@@ -538,6 +539,10 @@ public class Game implements GameRemote {
                 // exit
                 
                 // keep retrying until exit successfully
+                // TODO: currently the sleeping and retrying are done inside the switch role block
+                //       but as time passes our role may change. 
+                //       is it better just to let the outer do the sleep and retry?
+                // TODO: shall we let the tracker know we have exited?
                 while (true) {
                     boolean exitSucceeded = false;
                     switch (this.gameRole){
@@ -548,6 +553,7 @@ public class Game implements GameRemote {
                                 Thread.sleep(SLEEP_PERIOD);
                                 LOGGER.warning("[move] remoteApplyExit fail, retry");
                             }
+                            // TODO: shall we set exitSucceeded to be true so that it can break the loop?
                         break;
                         case BACKUP:
                             // call the primary server to exit
@@ -557,10 +563,14 @@ public class Game implements GameRemote {
                                 Thread.sleep(SLEEP_PERIOD);
                                 LOGGER.warning("[move] remoteApplyExit fail, retry");
                             }
+                            // TODO: shall we set exitSucceeded to be true so that it can break the loop?
                         break;
                         case PRIMARY:
-                            // promote the backup server (if not contactable just sleep and retry)
-                            // after promotion is successful, exit
+                            // TODO: 
+                            // if there is backup, it should be pinging the primary
+                            //   so if we just exit, there should not be a problem right?
+                            // if there is no backup, we can also just exit
+                            // 
                         break;
                         default:
                             System.out.println("wrong role type");
@@ -572,10 +582,8 @@ public class Game implements GameRemote {
                     }
 
                     // TODO
-                    // sleep for a while
+                    // sleep and retry
                 }
-
-                // notify tracker that I have exited
 
                 break;
             default:
