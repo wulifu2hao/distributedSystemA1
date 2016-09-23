@@ -246,10 +246,16 @@ public class Game implements GameRemote {
 
 
     // called by primary server itself to promote another server to backup
-    // this should happens when 
+    // Currently it is called when
+    //   primary helper discover backup is dead while pinging backup
+    // TODO:
+    //  there are 2 other cases where we should promote another server to backup
     //  a) there is no backup and one player asks to join
+    //     this case is different since the player just joined 
+    //     and we are sure that he is going to the backup (so we don't need the "findSomeone" part)
     //  b) backup server exit
-    //  c) discover backup is dead while pinging backup
+    //     this case needs to "promoteSomeoneToBackup". 
+    //     Shall we just let it go and let primary helper to detect it?
     public void promoteSomeoneToBackup(){
         // TODO: remember to set critical flag here
 
@@ -258,7 +264,40 @@ public class Game implements GameRemote {
         // let's set current backup to empty anyway
         this.backupPlayerID = "";
 
-        // TODO: find somebody to promote to backup
+        // find somebody to promote to backup
+        for (Map.Entry<String, PlayerAddr> entry : playerAddrMap.entrySet()) {
+            String playerID = entry.getKey();
+            PlayerAddr playerAddr = entry.getValue();
+
+            if (playerID == this.myPlayerAddr.playerID) {
+                continue;
+            }
+
+            boolean promoteSucceeded = false;
+            try {               
+                if (playerAddr == null){
+                    LOGGER.warning("Impossible! we got null value by iterating a map! playerID: "+playerID);
+                } else {
+                    GameRemote playerStub = getPlayerStub(playerAddr);                
+                    if (playerStub != null){                        
+                        playerStub.promoteSelfToBackup();
+                        // if we can reach here without throwing exception, 
+                        // the promotion is successful!
+                        promoteSucceeded = true;
+                    }      
+                }                               
+            } catch (Exception e) {
+                // do nothing
+            } 
+
+            if (promoteSucceeded){
+                this.backupPlayerID = playerID;
+                break;
+            } else {
+                // TODO: shall we remove a dead player here or
+                //       shall we leave it to the primaryHelper?
+            }
+        }
     }
 
     // this method is used by the primary server (not remote call)
@@ -275,6 +314,7 @@ public class Game implements GameRemote {
 
     /******  for backup server only  ******/
     // called by primary server to update backup server state
+    // TODO: now it becomes a bit confusing. should this be a method for any normal player?
     public void updateGameState(GameState gameState){
         LOGGER.info("[updateGameState] update player size: " + gameState.playerAddrMap.size());
         maze = gameState.maze;
@@ -282,8 +322,8 @@ public class Game implements GameRemote {
         playerScores = gameState.playerScores;
         playerAddrMap = gameState.playerAddrMap;
         if (gameState.isBecomeBackup) {
-            // TODO: does this mean's that this method is not only for backup server 
-            // but also for all normal players?
+            // TODO: promoteSelfToBackup is designed to be a remote method
+            // here it is called locally, will it be a problem?
             promoteSelfToBackup();
         }
         udpateGameInterface();
@@ -333,12 +373,15 @@ public class Game implements GameRemote {
 
     // this remote method is called by the actual primary server
     // it assumes the player has the correct knowledge of the primary server
-    public void promoteSelfToBackup(){
+    // TODO: now it looks like this method should always succeed 
+    //  and thus no need return any value, is it true?
+    public void promoteSelfToBackup(){        
+        // 1. update setting to make self backup
         gameRole = BACKUP;
-        // 1. update setting to make self primary
+        backupPlayerID = myPlayerAddr.playerID;
 
         // 2. start the backupHelper thread 
-//        (new Thread(new BackupHelper(this))).start();
+       (new Thread(new BackupHelper(this))).start();
     }
 
 

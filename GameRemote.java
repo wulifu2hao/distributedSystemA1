@@ -10,9 +10,11 @@ public interface GameRemote extends Remote {
     GameState applyPlayerMove(String playerID, String move) throws RemoteException;
 
     // for backup server
+    // TODO: I guess it is no only for backup server?
     void updateGameState(GameState gameState) throws RemoteException;
 
     // for all players
     PlayerAddr getPrimaryServer() throws RemoteException;
+	void promoteSelfToBackup() throws RemoteException;
  	void ping() throws RemoteException;
 }
