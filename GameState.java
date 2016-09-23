@@ -10,4 +10,9 @@ public class GameState implements java.io.Serializable {
     public Map<String, Integer> playerScores;
     public Map<String, PlayerAddr> playerAddrMap;
     boolean isBecomeBackup;
+    
+    boolean shouldChangePrimary;
+    String primaryPlayerID;
+    boolean shouldChangeBackup;
+    String backupPlayerID;
 }

@@ -103,11 +103,11 @@ public class Game implements GameRemote {
     public Game(String trackerIP, String trackerPort, String playerID) throws RemoteException, NotBoundException{
         this.trackerIP = trackerIP;
         this.trackerPort = trackerPort;
-        this.rand = new Random();
-        
         Registry registry = LocateRegistry.getRegistry(trackerIP);
         this.trackerStub = (TrackerRemote) registry.lookup("tracker");
-
+        
+        this.rand = new Random();
+        
         String ipAddr = Common.getLocalAddress();
         if (ipAddr == null) {
             LOGGER.severe("Cannot get ip address for " + playerID);
@@ -115,8 +115,8 @@ public class Game implements GameRemote {
         }
         this.myPlayerAddr = new PlayerAddr(ipAddr, DEFAULT_PORT, playerID);
         this.myPlayerAddr.playerID = playerID;
+        
         Common.registerGame(this);
-        // TODO: any other things to init here?
     }
 
 
@@ -125,10 +125,8 @@ public class Game implements GameRemote {
     // used when other player wants to join the game
     // the param and returned type for this method is not carefully considered yet
     public GameState addOtherPlayer(PlayerAddr playerAddr){
-        // TODO: here the primary server should check whether it is in critical period (promoting new backup server, etc)
-        // if yes just give an error and wait for the request to be retried
+        // TODO: shall we make this method synchronized since RMI remote call is multi-thread?
 
-        // if no critical period, just add the player (happy path)
         if (isPlayersFull()) {
             LOGGER.info("[addOtherPlayer] player is full");
             return null;
@@ -144,20 +142,20 @@ public class Game implements GameRemote {
         GameState gameState = prepareGameState();
         LOGGER.severe("[addOtherPlayer] after adding playerAddr size: " + playerAddrMap.size());
 
-        // TODO: if no backup then use it as backup
         if (this.playerAddrMap.size() <= 1) {
             LOGGER.severe("[addOtherPlayer] invalid playerAddrMap size");
         } else if (this.playerAddrMap.size() == 2) {
-            // TODO: this is one of the place that "promote a player to backup"
-            //       but the difference is that the player has not finished joining the game.
-            //       shall we distinguish this case with other promoting to backup cases?
+            // promote this player to backup    
+            // after this player calles updateGameState, it will starts behave as backup
             backupPlayerID = playerAddr.playerID;
             gameState.isBecomeBackup = true;
         } else {
             boolean ok = updateBackup();
             if (!ok) {
+                // current backup is dead, we should find another one
                 LOGGER.warning("update backup fail");
                 // TODO: recover backup
+                // (Let's just let the helper thread do this job and see if it works)
             }
         }
 
@@ -201,23 +199,27 @@ public class Game implements GameRemote {
         playerCoordMap.put(playerID, new Coord(newx, newy));
         maze[coord.x][coord.y] = EMPTY;
         maze[newx][newy] = playerID;
+
         boolean ok = updateBackup();
         if (!ok) {
             LOGGER.warning("update backup fail");
             // TODO: recover backup
+            // (Let's just let the helper thread do this job and see if it works)
         }
+    
         udpateGameInterface();
         return prepareGameState();
     }
 
 
+    // called by primary server to update gameState to backup
+    // 
+    private boolean updateBackup() {    
+        if (this.backupPlayerID == ""){
+            LOGGER.info("[updateBackup] backup not exist. skiped");
+            return true;
+        }
 
-    // synchronize with backup with all the game state data
-    // need to consider and handle the scenario when the backup is failed
-
-    // TODO: currently using playerID as tag, is it correct?
-    private boolean updateBackup() {
-        // TODO: rpc call backup.updateGameState
         LOGGER.info("[updateBackup] playersize: " + playerAddrMap.size());
         PlayerAddr backupPlayerAddr = playerAddrMap.get(backupPlayerID);
         Registry registry = null;
@@ -236,34 +238,32 @@ public class Game implements GameRemote {
             // TODO: customize error handling, for this case: backup fail or something
             // TODO: I think using handleError is problematic
             //       because if backup has failed, we should not rebind its tag!
-            Common.handleError(registry, remote, backupPlayerID, e);
-            LOGGER.warning("update backup fail. Error: "+e);
+            //       so I've commented out the following line
+            // Common.handleError(registry, remote, backupPlayerID, e);
+            LOGGER.warning("update backup fail!");
             return false;
         }
         
     }
-
-
 
     // called by primary server itself to promote another server to backup
     // Currently it is called when
     //   1. primary helper discover backup is dead while pinging backup
     //   2. backup server helper finds primary dead, it promotes itself to be primary 
     //      then try to promote another as backup
-    // TODO:
+    // note:
     //  there are 2 other cases where we should promote another server to backup
     //  a) there is no backup and one player asks to join
-    //     this case is different since the player just joined 
-    //     and we are sure that he is going to the backup (so we don't need the "findSomeone" part)
+    //     this case should be handled by primary setting gameState.isBecomeBackup=true
+    //      and the new player updateGameState to apply the change
     //  b) backup server exit
-    //     this case needs to "promoteSomeoneToBackup". 
-    //     Shall we just let it go and let primary helper to detect it?
+    //     this case is handled by applyPlayerExit function
     public void promoteSomeoneToBackup(){
-        // TODO: remember to set critical flag here
+        // TODO: synchronize method
 
-        // since we want to promote someone to backup, 
-        // there must be no current backup OR current backup fails
-        // let's set current backup to empty anyway
+        // empty the current backup playerID
+        // if the promotion fails, 
+        // then we will have no backup instead of wrong backup
         this.backupPlayerID = "";
 
         GameState gameState = prepareGameState();
@@ -285,8 +285,7 @@ public class Game implements GameRemote {
                     GameRemote playerStub = getPlayerStub(playerAddr);                
                     if (playerStub != null){  
                         // this will promote this player to be backup and also update gamestate 
-                        // TODO: but this doesn't give the new backup the knowledge of who is the primary server
-                        //       solve this problem!
+                        // here we assume the backup already has the correct knowledge of primaryPlayerID
                         playerStub.updateGameState(gameState);
                         // if we can reach here without throwing exception, 
                         // the promotion is successful!
@@ -302,22 +301,21 @@ public class Game implements GameRemote {
                 break;
             } else {
                 // TODO: shall we remove a dead player here or
-                //       shall we leave it to the primaryHelper?
+                //       let's leave it to the primaryHelper?
             }
         }
     }
 
     // this method is used by the primary server (not remote call)
-    // to remove a player that is already dead
-    // the player being removed can be backup server as well as 
+    // to remove a player that is already dead 
+    //  a) a dead primary server (when promoting self to primary)
+    //  b) a dead backup server (in primary helper thread)
+    //  c) a dead normal server (in primary helper thread)
+    // make sure you know the following side effect before using this method
+    // side effect 1: if backup is removed, it will call promoteSomeoneToBackup
+    // side effect 2: if others are remove, it will call updateBackup
     public void forceRemovePlayer(String playerID){
-        // TODO: think about the following problem
-        // applyPlayerExit removes the player from the gamestate, this is what we need
-        // however, applyPlayerExit updates backup on this change (which is a reasonable thing to do)
-        //          and when backup is not available, will applyPlayerExit succeed?
-        //          and what if the player that we're trying to remove is the backup server?
         applyPlayerExit(playerID);
-
         // TODO: again this is a place where we may think of removing the player from the tracker
         //       if the "remove player from the tracker only upon new player join game" strategy has problem
     }
@@ -328,22 +326,6 @@ public class Game implements GameRemote {
 
 
     /******  for backup server only  ******/
-    // called by primary server to update backup server state
-    // TODO: now it becomes a bit confusing. should this be a method for any normal player?
-    // Currently I'm using it also when we want to promote a normal player as backup
-    public void updateGameState(GameState gameState){
-        LOGGER.info("[updateGameState] update player size: " + gameState.playerAddrMap.size());
-        maze = gameState.maze;
-        playerCoordMap = gameState.playerCoordMap;
-        playerScores = gameState.playerScores;
-        playerAddrMap = gameState.playerAddrMap;
-        if (gameState.isBecomeBackup) {
-            // TODO: promoteSelfToBackup is designed to be a remote method
-            // here it is called locally, will it be a problem?
-            promoteSelfToBackup();
-        }
-        udpateGameInterface();
-    }
 
     // promote self to become primary and notify other nodes
     // currently this is only used when
@@ -351,33 +333,25 @@ public class Game implements GameRemote {
     // But we should think about whether the same mechanism applies when
     //  b) primary exit
     public void promoteSelfToPrimary(){
-        // TODO
-        // 0. set critical flag
+        // TODO synchronize
  
-        // 1.1 remove the old primary from gamestate
-        this.forceRemovePlayer(this.primaryPlayerID);
-
-        // 1.2 update setting to make self primary
+        // 1.1 update setting to make self primary
         this.gameRole = PRIMARY;
         this.primaryPlayerID = myPlayerAddr.playerID;
         this.backupPlayerID = "";
 
-        // 2. promote another to be backup if possible
-        // there is no gurantee that we can find somebody to promote
-        this.promoteSomeoneToBackup();
-
+        // 1.2 remove the old primary from gamestate
+        this.forceRemovePlayer(this.primaryPlayerID);
 
         GameState gameState = prepareGameState();
-        // 3. notify other players
-        // note: 
-        //  a) if the original primary crashes, 
-        //     then we just found that we fail to update it, it should be ok
-        //  b) if he asks for exit, and has not really exited yet, will it be a problem?
+        gameState.shouldChangePrimary = true;
+        gameState.primaryPlayerID = this.primaryPlayerID;
+        // 2. notify other players
         for (Map.Entry<String, PlayerAddr> entry : playerAddrMap.entrySet()) {
             String playerID = entry.getKey();
             PlayerAddr playerAddr = entry.getValue();
 
-            if (playerID == this.primaryPlayerID || playerID == this.backupPlayerID){
+            if (playerID == this.primaryPlayerID){
                 continue;
             }
 
@@ -388,9 +362,6 @@ public class Game implements GameRemote {
                 } else {
                     GameRemote playerStub = getPlayerStub(playerAddr);                
                     if (playerStub != null){  
-                        // TODO: again here we didn't really tell the player 
-                        //       who are the new primary and backup
-                        //       solve this problem!
                         playerStub.updateGameState(gameState);
                         // if we can reach here without throwing exception, 
                         // the promotion is successful!
@@ -405,6 +376,12 @@ public class Game implements GameRemote {
                 // TODO: again we should decide whether to deal with the dead player
             } 
         }
+
+        // 3. promote another to be backup if possible
+        // there is no gurantee that we can find somebody to promote
+        // the reason to put it after update all other players
+        // is that we want all other player to have the correct knowledge of primaryPlayerID
+        this.promoteSomeoneToBackup();
 
         
         // 4. start the primaryHelper thread 
@@ -428,10 +405,31 @@ public class Game implements GameRemote {
         return ;
     }
 
-    // this remote method is called by the actual primary server
-    // it assumes the player has the correct knowledge of the primary server
-    // TODO: now it looks like this method should always succeed 
-    //  and thus no need return any value, is it true?
+    // called by primary server to update backup server state
+    // previously this method is for backup server only,
+    // now I'm using it for normal server also
+    public void updateGameState(GameState gameState){
+        LOGGER.info("[updateGameState] update player size: " + gameState.playerAddrMap.size());
+        maze = gameState.maze;
+        playerCoordMap = gameState.playerCoordMap;
+        playerScores = gameState.playerScores;
+        playerAddrMap = gameState.playerAddrMap;
+        if (gameState.isBecomeBackup) {
+            promoteSelfToBackup();
+        }
+
+        if (gameState.shouldChangePrimary){
+            this.primaryPlayerID = gameState.primaryPlayerID;
+        }
+        if (gameState.shouldChangeBackup){
+            this.primaryPlayerID = gameState.backupPlayerID;
+        }
+
+        udpateGameInterface();
+    }
+
+    // you should call this method when you're sure that 
+    // the players knows the correct primaryPlayer
     public void promoteSelfToBackup(){        
         // 1. update setting to make self backup
         gameRole = BACKUP;
@@ -482,13 +480,15 @@ public class Game implements GameRemote {
                 this.primaryPlayerID = myPlayerAddr.playerID;
                 initGameState();                
                 joinSucceed = true;
-                // TODO: start the helper thread or make use of the promoteselftoprimary
+                (new Thread(new PrimaryHelper(this))).start();
                 LOGGER.info("join game succeeded");
 
             } else {
 
                 PlayerAddr primaryServerAddr = contactPlayer(response.playerAddr);
                 if (primaryServerAddr == null){
+                    LOGGER.warning("get primaryServerAddr null, something is very very wrong!");
+                    Thread.sleep(SLEEP_PERIOD);
                     continue;
                 }
 
@@ -522,8 +522,6 @@ public class Game implements GameRemote {
                 primaryServerAddr =  targetPlayerStub.getPrimaryServer();
             }
         } catch (Exception e) {
-            // TODO: log this exception in a simple way
-//            e.printStackTrace();
             LOGGER.warning("another player with id: "+ playerAddr.playerID+" uncontactable! " + e);
             isUncontactable = true;
         }
@@ -534,11 +532,11 @@ public class Game implements GameRemote {
             return null;
         }
         if (primaryServerAddr == null) {
-            // TODO: this is weird. If you can contact the player, 
+            //       this is weird. If you can contact the player, 
             //       but you don't get primary server
             //       It means the program has a bug!
             //       retrying doesn't help
-            LOGGER.info("get primaryServerAddr null, retry...");
+            LOGGER.warning("get primaryServerAddr null, something is very very wrong!");
             return null;
         }
         return primaryServerAddr;
@@ -629,10 +627,7 @@ public class Game implements GameRemote {
             case EXIT:
                 // exit
                 
-                // keep retrying until exit successfully
-                // TODO: currently the sleeping and retrying are done inside the switch role block
-                //       but as time passes our role may change. 
-                //       is it better just to let the outer do the sleep and retry?
+                // keep retrying until exit successfully            
                 // TODO: shall we let the tracker know we have exited?
                 while (true) {
                     boolean exitSucceeded = false;
@@ -640,28 +635,30 @@ public class Game implements GameRemote {
                         case NORMAL:
                             // call the primary server to exit
                             // if uncontactable, just sleep for a while to get notified the new primary
-                            while (remoteApplyMove(EXIT) == null){
-                                Thread.sleep(SLEEP_PERIOD);
+                            if (remoteApplyMove(EXIT) != null){
+                                exitSucceeded = true;
+                            } else {
                                 LOGGER.warning("[move] remoteApplyExit fail, retry");
                             }
-                            // TODO: shall we set exitSucceeded to be true so that it can break the loop?
                         break;
                         case BACKUP:
                             // call the primary server to exit
                             // if uncontactable, it is likely that the game is undergoing critical period,
                             // just sleep and retry (next time I'm mostly likely to be the primary server)
-                            while (remoteApplyMove(EXIT) == null){
-                                Thread.sleep(SLEEP_PERIOD);
+                            if (remoteApplyMove(EXIT) != null){
+                                exitSucceeded = true;
+                            } else {
                                 LOGGER.warning("[move] remoteApplyExit fail, retry");
                             }
-                            // TODO: shall we set exitSucceeded to be true so that it can break the loop?
                         break;
                         case PRIMARY:
-                            // TODO: 
-                            // if there is backup, it should be pinging the primary
-                            //   so if we just exit, there should not be a problem right?
-                            // if there is no backup, we can also just exit
-                            // 
+                            // TODO: now we exit without doing anything                        
+                            //       hoping the backup helper thread to discover in tiem
+                            //       but maybe it's better that we do some extra work
+                            //       like promoting another primary&backup before shutting down
+                            //       because if backup crashes when we exit, the game is over!
+                            LOGGER.info("[move] primary exit");
+                            exitSucceeded = true;
                         break;
                         default:
                             System.out.println("wrong role type");
@@ -672,8 +669,10 @@ public class Game implements GameRemote {
                         break;
                     }
 
-                    // TODO
                     // sleep and retry
+                    // I've move out the sleep and retry logic to this place
+                    // because I want the retry to re-switch the role
+                    Thread.sleep(SLEEP_PERIOD);
                 }
 
                 break;
@@ -722,17 +721,26 @@ public class Game implements GameRemote {
         }
     }
 
+    // currently this function assumes playerID != primaryPlayerID
     private GameState applyPlayerExit(String playerID) {
         Coord coord = playerCoordMap.get(playerID);
         maze[coord.x][coord.y] = EMPTY;
         playerAddrMap.remove(playerID);
         playerCoordMap.remove(playerID);
         playerScores.remove(playerID);
-        boolean ok = updateBackup();
-        if (!ok){
-            //TODO: thread backup to recover it
-            return null;
+
+        if (playerID == backupPlayerID){
+            // backup exit, we need to find another one
+            promoteSomeoneToBackup();
+        } else {
+            boolean ok = updateBackup();
+            if (!ok){
+                //TODO: recover backup
+                // Let's leave it to the helper thread and see whether it works well
+                // return null;
+            }
         }
+
         return prepareGameState();
     }
 
