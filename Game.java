@@ -247,7 +247,9 @@ public class Game implements GameRemote {
 
     // called by primary server itself to promote another server to backup
     // Currently it is called when
-    //   primary helper discover backup is dead while pinging backup
+    //   1. primary helper discover backup is dead while pinging backup
+    //   2. backup server helper finds primary dead, it promotes itself to be primary 
+    //      then try to promote another as backup
     // TODO:
     //  there are 2 other cases where we should promote another server to backup
     //  a) there is no backup and one player asks to join
@@ -264,6 +266,8 @@ public class Game implements GameRemote {
         // let's set current backup to empty anyway
         this.backupPlayerID = "";
 
+        GameState gameState = prepareGameState();
+        gameState.isBecomeBackup = true;
         // find somebody to promote to backup
         for (Map.Entry<String, PlayerAddr> entry : playerAddrMap.entrySet()) {
             String playerID = entry.getKey();
@@ -279,8 +283,11 @@ public class Game implements GameRemote {
                     LOGGER.warning("Impossible! we got null value by iterating a map! playerID: "+playerID);
                 } else {
                     GameRemote playerStub = getPlayerStub(playerAddr);                
-                    if (playerStub != null){                        
-                        playerStub.promoteSelfToBackup();
+                    if (playerStub != null){  
+                        // this will promote this player to be backup and also update gamestate 
+                        // TODO: but this doesn't give the new backup the knowledge of who is the primary server
+                        //       solve this problem!
+                        playerStub.updateGameState(gameState);
                         // if we can reach here without throwing exception, 
                         // the promotion is successful!
                         promoteSucceeded = true;
@@ -301,10 +308,18 @@ public class Game implements GameRemote {
     }
 
     // this method is used by the primary server (not remote call)
-    // to remove a player from both game state and tracker
-    // TODO: implement this method
+    // to remove a player that is already dead
+    // the player being removed can be backup server as well as 
     public void forceRemovePlayer(String playerID){
-        // this method should be able to make use of method applyPlayerExit
+        // TODO: think about the following problem
+        // applyPlayerExit removes the player from the gamestate, this is what we need
+        // however, applyPlayerExit updates backup on this change (which is a reasonable thing to do)
+        //          and when backup is not available, will applyPlayerExit succeed?
+        //          and what if the player that we're trying to remove is the backup server?
+        applyPlayerExit(playerID);
+
+        // TODO: again this is a place where we may think of removing the player from the tracker
+        //       if the "remove player from the tracker only upon new player join game" strategy has problem
     }
 
     /******  End of for primary server only  ******/
@@ -315,6 +330,7 @@ public class Game implements GameRemote {
     /******  for backup server only  ******/
     // called by primary server to update backup server state
     // TODO: now it becomes a bit confusing. should this be a method for any normal player?
+    // Currently I'm using it also when we want to promote a normal player as backup
     public void updateGameState(GameState gameState){
         LOGGER.info("[updateGameState] update player size: " + gameState.playerAddrMap.size());
         maze = gameState.maze;
@@ -330,26 +346,67 @@ public class Game implements GameRemote {
     }
 
     // promote self to become primary and notify other nodes
-    // this can happen when 
+    // currently this is only used when
     //  a) discover primary dead when pinging primary
+    // But we should think about whether the same mechanism applies when
     //  b) primary exit
     public void promoteSelfToPrimary(){
+        // TODO
         // 0. set critical flag
  
-        // 1. update setting to make self primary
+        // 1.1 remove the old primary from gamestate
+        this.forceRemovePlayer(this.primaryPlayerID);
 
-        // 2. notify other players
+        // 1.2 update setting to make self primary
+        this.gameRole = PRIMARY;
+        this.primaryPlayerID = myPlayerAddr.playerID;
+        this.backupPlayerID = "";
+
+        // 2. promote another to be backup if possible
+        // there is no gurantee that we can find somebody to promote
+        this.promoteSomeoneToBackup();
+
+
+        GameState gameState = prepareGameState();
+        // 3. notify other players
         // note: 
         //  a) if the original primary crashes, 
         //     then we just found that we fail to update it, it should be ok
         //  b) if he asks for exit, and has not really exited yet, will it be a problem?
+        for (Map.Entry<String, PlayerAddr> entry : playerAddrMap.entrySet()) {
+            String playerID = entry.getKey();
+            PlayerAddr playerAddr = entry.getValue();
 
-        // 2.5 from the result of notifying other players
-        //     we know who are dead and should remove them from tracker
-        //     this should at least help us removing the crashed primary server
+            if (playerID == this.primaryPlayerID || playerID == this.backupPlayerID){
+                continue;
+            }
+
+            boolean updateSucceeded = false;
+            try {               
+                if (playerAddr == null){
+                    LOGGER.warning("Impossible! we got null value by iterating a map! playerID: "+playerID);
+                } else {
+                    GameRemote playerStub = getPlayerStub(playerAddr);                
+                    if (playerStub != null){  
+                        // TODO: again here we didn't really tell the player 
+                        //       who are the new primary and backup
+                        //       solve this problem!
+                        playerStub.updateGameState(gameState);
+                        // if we can reach here without throwing exception, 
+                        // the promotion is successful!
+                        updateSucceeded = true;
+                    }      
+                }                               
+            } catch (Exception e) {
+                // do nothing
+            } 
+
+            if (!updateSucceeded){
+                // TODO: again we should decide whether to deal with the dead player
+            } 
+        }
+
         
-        // 3. promote another to be backup if possible
-
         // 4. start the primaryHelper thread 
         (new Thread(new PrimaryHelper(this))).start();
 
@@ -425,6 +482,7 @@ public class Game implements GameRemote {
                 this.primaryPlayerID = myPlayerAddr.playerID;
                 initGameState();                
                 joinSucceed = true;
+                // TODO: start the helper thread or make use of the promoteselftoprimary
                 LOGGER.info("join game succeeded");
 
             } else {
@@ -445,20 +503,6 @@ public class Game implements GameRemote {
             }
 
         }
-
-        // after this step, we should either
-        // 1) become a primary server and 
-        //  a) start a thread to periodically ping the backup server to ensure backup is live 
-        //      (TODO: this may have problem since there can be only 1 player in the game)
-
-
-
-        // 2) become a backup server and 
-        //  a) start a thread to periodically ping the primary server to ensure backup is live 
-        //     and prepare to become the primary server whenever primary is dead
-
-
-        // 3) become normal player but know how to contact primary server to do move
 
         return true;
     }
@@ -490,6 +534,10 @@ public class Game implements GameRemote {
             return null;
         }
         if (primaryServerAddr == null) {
+            // TODO: this is weird. If you can contact the player, 
+            //       but you don't get primary server
+            //       It means the program has a bug!
+            //       retrying doesn't help
             LOGGER.info("get primaryServerAddr null, retry...");
             return null;
         }
