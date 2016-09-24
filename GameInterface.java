@@ -19,6 +19,7 @@ public class GameInterface extends JFrame {
      */
 
     private JPanel center;
+    private JLabel roleLabel;
     private InterfaceData data;
     private final Logger LOGGER = Logger.getLogger("GameInterface");
 
@@ -72,11 +73,10 @@ public class GameInterface extends JFrame {
     public void updateInterface(InterfaceData data) {
         this.data = data;
         drawCenter();
+        revalidate();
         setVisible(true);
     }
 
-    // TODO: when the role of a player change,
-    // the old role should be removed from the GUI
     private void drawCenter() {
         int role = data.role;
         String[][] maze = data.maze;
@@ -91,11 +91,20 @@ public class GameInterface extends JFrame {
                 roleStr = "Primary server"; break;
         }
 
-        final JLabel roleLabel = new JLabel(roleStr);
-        roleLabel.setBorder(new EmptyBorder(10, 10, 10, 10));
-        add(roleLabel, BorderLayout.NORTH);
+        if (roleLabel == null) {
+            LOGGER.info("[drawCenter] init role to " + roleStr);
+            roleLabel = new JLabel(roleStr);
+            roleLabel.setBorder(new EmptyBorder(10, 10, 10, 10));
+            add(roleLabel, BorderLayout.NORTH);
+        } else {
+            LOGGER.info("[drawCenter] change role to " + roleStr);
+            roleLabel.setText(roleStr);
+        }
 
         /* add center panel with flowlayout */
+        if (center != null) {
+            remove(center);
+        }
         center = new JPanel();
         center.setLayout(new FlowLayout());
         center.setBorder(new EmptyBorder(10, 10, 10, 10));
