@@ -362,14 +362,17 @@ public class Game implements GameRemote {
         // TODO synchronize
         String logtag = "[promoteSelfToPrimary] ";
  
+
+
         // 1.1 update setting to make self primary
         this.gameRole = PRIMARY;
+        String oldPrimaryPlayerID = this.primaryPlayerID;
         this.primaryPlayerID = myPlayerAddr.playerID;
         this.backupPlayerID = "";
         LOGGER.info(logtag+" finish setting self to primary");
 
         // 1.2 remove the old primary from gamestate
-        this.forceRemovePlayer(this.primaryPlayerID);
+        this.forceRemovePlayer(oldPrimaryPlayerID);
         LOGGER.info(logtag+" finish removing old primary player");
 
         GameState gameState = prepareGameState();
