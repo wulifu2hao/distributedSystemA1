@@ -11,12 +11,13 @@ import java.rmi.registry.LocateRegistry;
 import java.rmi.registry.Registry;
 import java.rmi.RemoteException;
 import java.util.Scanner;
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReentrantLock;
 import java.util.logging.Logger;
 
 public class Game implements GameRemote {
 
     // game move type
-    // TODO: I think the direction here is wrong, entering 1 actually moves north
     private static final String REFRESH = "0";
     private static final String MOVE_WEST = "1";
     private static final String MOVE_SOUTH = "2";
@@ -58,6 +59,7 @@ public class Game implements GameRemote {
     Map<String, PlayerAddr> playerAddrMap = new Hashtable<>();
 
     private static final int DEFAULT_PORT = 0;
+    private Lock lockJoinGame = new ReentrantLock();
 
     // GUI
     GameInterface gameInterface;
@@ -187,13 +189,13 @@ public class Game implements GameRemote {
             case EXIT:
                 return applyPlayerExit(playerID);
             case MOVE_WEST:
-                newx --; break;
-            case MOVE_SOUTH:
-                newy ++; break;
-            case MOVE_EAST:
-                newx ++; break;
-            case MOVE_NORTH:
                 newy --; break;
+            case MOVE_SOUTH:
+                newx ++; break;
+            case MOVE_EAST:
+                newy ++; break;
+            case MOVE_NORTH:
+                newx --; break;
         }
         if (newx < 0 || newx >= N || newy < 0 || newy >= N) {
             LOGGER.info(logtag+"Illegal move (out of boundary)");
@@ -502,64 +504,71 @@ public class Game implements GameRemote {
         return targetPlayerStub;
     }
 
-    public boolean joinGame() throws RemoteException, NotBoundException, InterruptedException{
+    public boolean joinGame() {
         // try join game till success
         // assume the tracker never fails, it should be able to joingame just by keep retrying
         String logtag = "[joinGame] ";
+        lockJoinGame.lock();
         int counter = 1;
-        while (true) {
-            // By calling tracker.GetGameInfo we should get value of N, K and optionally another playerID
-            LOGGER.info(logtag+counter+" attemps");
-            TrackerResponse response = this.trackerStub.getTrackerInfo();            
+        try {
+            while (true) {
+                // By calling tracker.GetGameInfo we should get value of N, K and optionally another playerID
+                LOGGER.info(logtag + counter + " attemps");
+                TrackerResponse response = this.trackerStub.getTrackerInfo();
 
-            this.N = response.dim;
-            this.K = response.treasures_num;            
-            
-            boolean joinSucceed = false;
-            if (response.playerAddr == null){
-                LOGGER.info(logtag+"trying to join as primary server");
-                // we will become the primary server!
-                if (!this.trackerStub.addPrimaryPlayer(this.myPlayerAddr)) {
-                    // fail to become the primary server
-                    // maybe another player has already become the primary
-                    // ley's retry joingame
-                    LOGGER.info(logtag+"fail to join as primary server. (maybe another has joined)");
-                    continue;
+                this.N = response.dim;
+                this.K = response.treasures_num;
+
+                boolean joinSucceed = false;
+                if (response.playerAddr == null) {
+                    LOGGER.info(logtag + "trying to join as primary server");
+                    // we will become the primary server!
+                    if (!this.trackerStub.addPrimaryPlayer(this.myPlayerAddr)) {
+                        // fail to become the primary server
+                        // maybe another player has already become the primary
+                        // ley's retry joingame
+                        LOGGER.info(logtag + "fail to join as primary server. (maybe another has joined)");
+                        continue;
+                    }
+
+                    // initialization for primary server
+                    LOGGER.info(logtag + "succeeded in joining as primary server. initializing.");
+                    this.gameRole = PRIMARY;
+                    this.primaryPlayerID = myPlayerAddr.playerID;
+                    initGameState();
+                    joinSucceed = true;
+                    (new Thread(new PrimaryHelper(this))).start();
+                    LOGGER.info(logtag + "join game succeeded");
+
+                } else {
+
+                    PlayerAddr primaryServerAddr = contactPlayer(response.playerAddr);
+                    if (primaryServerAddr == null) {
+                        LOGGER.warning(logtag + "get primaryServerAddr null, something is very very wrong!");
+                        Thread.sleep(SLEEP_PERIOD);
+                        continue;
+                    }
+
+                    LOGGER.info(logtag + "successfully obtain primary server contact!");
+                    // 2. keep calling this primary server to join game until succeed or primary server unavailable
+                    joinSucceed = tryJoinPrimary(primaryServerAddr);
                 }
 
-                // initialization for primary server
-                LOGGER.info(logtag+"succeeded in joining as primary server. initializing.");
-                this.gameRole = PRIMARY;
-                this.primaryPlayerID = myPlayerAddr.playerID;
-                initGameState();                
-                joinSucceed = true;
-                (new Thread(new PrimaryHelper(this))).start();
-                LOGGER.info(logtag+"join game succeeded");
-
-            } else {
-
-                PlayerAddr primaryServerAddr = contactPlayer(response.playerAddr);
-                if (primaryServerAddr == null){
-                    LOGGER.warning(logtag+"get primaryServerAddr null, something is very very wrong!");
-                    Thread.sleep(SLEEP_PERIOD);
-                    continue;
+                if (joinSucceed) {
+                    LOGGER.info(logtag + "join succeeded. init game interface.");
+                    gameInterface = GameInterface.initGameInterface(myPlayerAddr.playerID, Common.prepareInterfaceData(prepareGameState(), gameRole));
+                    if (!this.trackerStub.addPlayerAddr(this.myPlayerAddr)) {
+                        LOGGER.severe(logtag + "fail to add self address to tracker");
+                    }
+                    break;
                 }
 
-                LOGGER.info(logtag+"successfully obtain primary server contact!");
-                // 2. keep calling this primary server to join game until succeed or primary server unavailable
-                joinSucceed = tryJoinPrimary(primaryServerAddr);
+                counter++;
             }
-
-            if (joinSucceed){
-                LOGGER.info(logtag+"join succeeded. init game interface.");
-                gameInterface = GameInterface.initGameInterface(myPlayerAddr.playerID, Common.prepareInterfaceData(prepareGameState(), gameRole));
-                if (!this.trackerStub.addPlayerAddr(this.myPlayerAddr)) {
-                    LOGGER.severe(logtag+"fail to add self address to tracker");
-                }
-                break;
-            }
-
-            counter++;
+        }catch(Exception e) {
+            e.printStackTrace();
+        }finally {
+            lockJoinGame.unlock();
         }
 
         LOGGER.info(logtag+"join succeeded and finished.");
