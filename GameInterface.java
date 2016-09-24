@@ -75,6 +75,8 @@ public class GameInterface extends JFrame {
         setVisible(true);
     }
 
+    // TODO: when the role of a player change,
+    // the old role should be removed from the GUI
     private void drawCenter() {
         int role = data.role;
         String[][] maze = data.maze;

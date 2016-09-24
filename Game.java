@@ -16,6 +16,7 @@ import java.util.logging.Logger;
 public class Game implements GameRemote {
 
     // game move type
+    // TODO: I think the direction here is wrong, entering 1 actually moves north
     private static final String REFRESH = "0";
     private static final String MOVE_WEST = "1";
     private static final String MOVE_SOUTH = "2";
@@ -798,6 +799,7 @@ public class Game implements GameRemote {
         playerAddrMap.remove(playerID);
         playerCoordMap.remove(playerID);
         playerScores.remove(playerID);
+        udpateGameInterface();
         LOGGER.info(logtag+"player removed from gamestate.");
 
         if (playerID == backupPlayerID){

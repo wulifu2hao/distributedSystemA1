@@ -88,7 +88,6 @@ public class PrimaryHelper implements Runnable  {
             }
 
             // let's now ping other players to make sure they are alive 
-            LOGGER.info(logtag+"detecting dead players");
             Set<String> deadPlayerSet = new HashSet<>();
             for (Map.Entry<String, PlayerAddr> entry : primaryPlayer.playerAddrMap.entrySet()) {
 			    String playerID = entry.getKey();
@@ -123,7 +122,6 @@ public class PrimaryHelper implements Runnable  {
 			}
 
 			// remove the dead players
-			LOGGER.info(logtag+"removing dead bodies");
 			Iterator<String> iter = deadPlayerSet.iterator();
 			while (iter.hasNext()) {
 				String deadPlayerID = iter.next();
