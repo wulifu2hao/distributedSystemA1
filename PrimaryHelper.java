@@ -10,25 +10,29 @@ public class PrimaryHelper implements Runnable  {
 	// TODO: any place that access primaryPlayer may have concurrent access issue.
 	// think about how to solve it
 	Game primaryPlayer;
+	String logtag;
 
 	private final Logger LOGGER = Logger.getLogger("primaryPlayer");
 
 	public PrimaryHelper(Game primaryPlayer){
 		this.primaryPlayer = primaryPlayer;
+		this.logtag = "[primary helper of "+primaryPlayer.myPlayerAddr.playerID+"] ";
 	}
 
 	public void run() {
 		// keep pinging everybody 
+		LOGGER.info(logtag+"starts running");
 		while (true) {
 			try{
 				Thread.sleep(SLEEP_PERIOD);
 			} catch (Exception e){
-				// TODO: log it
+				LOGGER.warning(logtag+"sleep is interupted!");
 			}	
 
 			// TODO: using remote call to detect self dead may be wrong!
 			// 		 since helper is only a thread, 
 			// 		 maybe we don't even have to worry about this?
+			// 		 anyway I don't think this will cause problem
 		    boolean selfUncontactable = false;
 		    try {		    	
                 GameRemote primaryPlayerStub = primaryPlayer.getPlayerStub(primaryPlayer.myPlayerAddr);                
@@ -42,7 +46,7 @@ public class PrimaryHelper implements Runnable  {
             } 			
             
             if (selfUncontactable){
-				LOGGER.info("primaryPlayerStub not contactable. shutting down...");
+				LOGGER.info(logtag+"primaryPlayerStub not contactable. shutting down...");
             	return; 
             }
 
@@ -52,7 +56,7 @@ public class PrimaryHelper implements Runnable  {
 			    try {		    	
 			    	PlayerAddr backupAddr = primaryPlayer.playerAddrMap.get(primaryPlayer.backupPlayerID);
 			    	if (backupAddr == null){
-			    		LOGGER.warning("BUGGY! fail to get backup server address of id: "+primaryPlayer.backupPlayerID+" from primaryPlayer.playerAddrMap");
+			    		LOGGER.warning(logtag+"BUGGY! fail to get backup server address of id: "+primaryPlayer.backupPlayerID+" from primaryPlayer.playerAddrMap");
 			    		backupUncontactable = true;
 			    	} else {
 			    		GameRemote backupPlayerStub = primaryPlayer.getPlayerStub(backupAddr);                
@@ -67,7 +71,7 @@ public class PrimaryHelper implements Runnable  {
 	            } 
 
 	            if (backupUncontactable){
-	            	LOGGER.info("backupUncontactable. removing backup: "+primaryPlayer.backupPlayerID);
+	            	LOGGER.info(logtag+"backupUncontactable. removing backup: "+primaryPlayer.backupPlayerID);
 	            	// remove this player from gamestate as well as tracker info
 	            	primaryPlayer.forceRemovePlayer(primaryPlayer.backupPlayerID);
 
@@ -77,13 +81,14 @@ public class PrimaryHelper implements Runnable  {
 					// b) if the exist another player alive, he will become backup
 					// 	  i.e. the only possibility that we fails to promote a backup shoud be 
 					// 		   because we are the only player left in the game
-					LOGGER.info("attempt to promote someone to backup...");
+					LOGGER.info(logtag+"attempt to promote someone to backup...");
 					primaryPlayer.promoteSomeoneToBackup();
 	            } 
 
             }
 
             // let's now ping other players to make sure they are alive 
+            LOGGER.info(logtag+"detecting dead players");
             Set<String> deadPlayerSet = new HashSet<>();
             for (Map.Entry<String, PlayerAddr> entry : primaryPlayer.playerAddrMap.entrySet()) {
 			    String playerID = entry.getKey();
@@ -97,7 +102,7 @@ public class PrimaryHelper implements Runnable  {
 			    boolean playerUncontactable = false;
 			    try {		    	
 			    	if (playerAddr == null){
-			    		LOGGER.warning("Impossible! we got null value by iterating a map! playerID: "+playerID);
+			    		LOGGER.warning(logtag+"Impossible! we got null value by iterating a map! playerID: "+playerID);
 			    		playerUncontactable = true;
 			    	} else {
 			    		GameRemote playerStub = primaryPlayer.getPlayerStub(playerAddr);                
@@ -113,14 +118,16 @@ public class PrimaryHelper implements Runnable  {
 
 				if (playerUncontactable){
 					deadPlayerSet.add(playerID);
+					LOGGER.info(logtag+"dead player detected: "+playerID);
 	            } 
 			}
 
 			// remove the dead players
+			LOGGER.info(logtag+"removing dead bodies");
 			Iterator<String> iter = deadPlayerSet.iterator();
 			while (iter.hasNext()) {
 				String deadPlayerID = iter.next();
-				LOGGER.info("found dead player: "+deadPlayerID+". force removing...");
+				LOGGER.info(logtag+"removing player "+deadPlayerID);
 				primaryPlayer.forceRemovePlayer(deadPlayerID);
 			}
 

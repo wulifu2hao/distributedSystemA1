@@ -100,6 +100,7 @@ public class Game implements GameRemote {
     }
 
     // Constructor
+    // TODO add log
     public Game(String trackerIP, String trackerPort, String playerID) throws RemoteException, NotBoundException{
         this.trackerIP = trackerIP;
         this.trackerPort = trackerPort;
@@ -124,6 +125,7 @@ public class Game implements GameRemote {
     /******   for primary server only  ******/
     // used when other player wants to join the game
     // the param and returned type for this method is not carefully considered yet
+    // TODO add log
     public GameState addOtherPlayer(PlayerAddr playerAddr){
         // TODO: shall we make this method synchronized since RMI remote call is multi-thread?
 
@@ -165,6 +167,7 @@ public class Game implements GameRemote {
 
     // called by other players to apply a move
     // @return: GameState as update result
+    // TODO add log
     public GameState applyPlayerMove(String playerID, String move){
         // the actual game logic goes here
         Coord coord = playerCoordMap.get(playerID);
@@ -213,7 +216,7 @@ public class Game implements GameRemote {
 
 
     // called by primary server to update gameState to backup
-    // 
+    // TODO add log
     private boolean updateBackup() {    
         if (this.backupPlayerID == ""){
             LOGGER.info("[updateBackup] backup not exist. skiped");
@@ -258,6 +261,7 @@ public class Game implements GameRemote {
     //      and the new player updateGameState to apply the change
     //  b) backup server exit
     //     this case is handled by applyPlayerExit function
+    // TODO add log
     public void promoteSomeoneToBackup(){
         // TODO: synchronize method
 
@@ -314,6 +318,7 @@ public class Game implements GameRemote {
     // make sure you know the following side effect before using this method
     // side effect 1: if backup is removed, it will call promoteSomeoneToBackup
     // side effect 2: if others are remove, it will call updateBackup
+    // TODO add log
     public void forceRemovePlayer(String playerID){
         applyPlayerExit(playerID);
         // TODO: again this is a place where we may think of removing the player from the tracker
@@ -332,6 +337,7 @@ public class Game implements GameRemote {
     //  a) discover primary dead when pinging primary
     // But we should think about whether the same mechanism applies when
     //  b) primary exit
+    // TODO add log
     public void promoteSelfToPrimary(){
         // TODO synchronize
  
@@ -408,6 +414,7 @@ public class Game implements GameRemote {
     // called by primary server to update backup server state
     // previously this method is for backup server only,
     // now I'm using it for normal server also
+    // TODO add log
     public void updateGameState(GameState gameState){
         LOGGER.info("[updateGameState] update player size: " + gameState.playerAddrMap.size());
         maze = gameState.maze;
@@ -430,6 +437,7 @@ public class Game implements GameRemote {
 
     // you should call this method when you're sure that 
     // the players knows the correct primaryPlayer
+    // TODO add log
     public void promoteSelfToBackup(){        
         // 1. update setting to make self backup
         gameRole = BACKUP;
@@ -451,13 +459,14 @@ public class Game implements GameRemote {
         return targetPlayerStub;
     }
 
-
     public boolean joinGame() throws RemoteException, NotBoundException, InterruptedException{
-        LOGGER.info("trying to join game");
         // try join game till success
         // assume the tracker never fails, it should be able to joingame just by keep retrying
+        String logtag = "[joinGame] ";
+        int counter = 1;
         while (true) {
             // By calling tracker.GetGameInfo we should get value of N, K and optionally another playerID
+            LOGGER.info(logtag+counter+" attemps");
             TrackerResponse response = this.trackerStub.getTrackerInfo();            
 
             this.N = response.dim;
@@ -465,45 +474,49 @@ public class Game implements GameRemote {
             
             boolean joinSucceed = false;
             if (response.playerAddr == null){
-                LOGGER.info("trying to join as primary server");
+                LOGGER.info(logtag+"trying to join as primary server");
                 // we will become the primary server!
                 if (!this.trackerStub.addPrimaryPlayer(this.myPlayerAddr)) {
                     // fail to become the primary server
                     // maybe another player has already become the primary
                     // ley's retry joingame
-                    LOGGER.info("fail to join as primary server");
+                    LOGGER.info(logtag+"fail to join as primary server. (maybe another has joined)");
                     continue;
                 }
 
                 // initialization for primary server
+                LOGGER.info(logtag+"succeeded in joining as primary server. initializing.");
                 this.gameRole = PRIMARY;
                 this.primaryPlayerID = myPlayerAddr.playerID;
                 initGameState();                
                 joinSucceed = true;
                 (new Thread(new PrimaryHelper(this))).start();
-                LOGGER.info("join game succeeded");
+                LOGGER.info(logtag+"join game succeeded");
 
             } else {
 
                 PlayerAddr primaryServerAddr = contactPlayer(response.playerAddr);
                 if (primaryServerAddr == null){
-                    LOGGER.warning("get primaryServerAddr null, something is very very wrong!");
+                    LOGGER.warning(logtag+"get primaryServerAddr null, something is very very wrong!");
                     Thread.sleep(SLEEP_PERIOD);
                     continue;
                 }
 
-                LOGGER.info("successfully obtain primary server contact!");
+                LOGGER.info(logtag+"successfully obtain primary server contact!");
                 // 2. keep calling this primary server to join game until succeed or primary server unavailable
                 joinSucceed = tryJoinPrimary(primaryServerAddr);
             }
 
             if (joinSucceed){
+                LOGGER.info(logtag+"join succeeded. init game interface.");
                 gameInterface = GameInterface.initGameInterface(myPlayerAddr.playerID, Common.prepareInterfaceData(prepareGameState(), gameRole));
                 break;
             }
 
+            counter++;
         }
 
+        LOGGER.info(logtag+"join succeeded and finished.");
         return true;
     }
 
@@ -542,8 +555,10 @@ public class Game implements GameRemote {
         return primaryServerAddr;
     }
 
+
     private boolean tryJoinPrimary(PlayerAddr primaryServerAddr) throws InterruptedException{
         // 2. keep calling this primary server to join game until succeed or primary server unavailable
+        String logtag = "[tryJoinPrimary] ";
         while (true) {
             // try to ask primary to add me to the game
             boolean isUncontactable = false;
@@ -556,28 +571,30 @@ public class Game implements GameRemote {
                     gameState = primaryPlayerStub.addOtherPlayer(this.myPlayerAddr);
                 }
             } catch (Exception e) {
-                LOGGER.warning("[tryJoinPrimary] primary server with id: "+ primaryServerAddr.playerID+" not contactable. Error: " + e);
+
                 isUncontactable = true;
             }
 
             if (isUncontactable) {
                 // fail because primary not contactable
                 // break this loop and continue the whole thing
+                LOGGER.warning("[tryJoinPrimary] primary server with id: "+ primaryServerAddr.playerID+" not contactable");
                 return false;
             }
 
             if (gameState == null) {
                 // fail because primary doesn't allow you to join -> sleep and then continue
-                LOGGER.info("primary server doesn't allow join game");
+                LOGGER.info(logtag+"primary server doesn't allow join game");
                 Thread.sleep(SLEEP_PERIOD);
                 continue;
             }
 
-            LOGGER.info("successfully allowed to join game by primary server");
+            LOGGER.info(logtag+"successfully allowed to join game by primary server");
             // update game state
             this.primaryPlayerID = primaryServerAddr.playerID;
+            LOGGER.info(logtag+"updating gamestate");
             this.updateGameState(gameState);
-            LOGGER.info("join game succeeded");
+            LOGGER.info(logtag+"finish updating gamestate");
             return true;
         }
     }
@@ -592,14 +609,16 @@ public class Game implements GameRemote {
             GameState gameState = primaryRemote.applyPlayerMove(this.myPlayerAddr.playerID, nextMove);
             return gameState;
         }catch (Exception e) {
-            LOGGER.warning("[remoteApplyMove] error: " + e);
-            Common.handleError(registry, primaryRemote, primaryPlayerID, e);
+            LOGGER.warning("[remoteApplyMove] fails because primary uncontactable");
+            // TODO: I think handleError is wrong because it rebinds the primaryRemote
+            // Common.handleError(registry, primaryRemote, primaryPlayerID, e);
             // connection error return null
             return null;
         }
     }
 
     public void move(String nextMove) throws InterruptedException{
+        String logtag = "[move] ";
         switch (nextMove) {
             case REFRESH:
             case MOVE_WEST:
@@ -608,17 +627,21 @@ public class Game implements GameRemote {
             case MOVE_NORTH:
                 if (this.gameRole == PRIMARY) {
                     // I am the primary server, I can just update my gamestate
+                    LOGGER.info(logtag+"is primary, applying move locally");
                     GameState gameState = this.applyPlayerMove(this.myPlayerAddr.playerID, nextMove);
+                    LOGGER.info(logtag+"finish apply. updating");
                     gameInterface.updateInterface(Common.prepareInterfaceData(gameState, gameRole));
                 } else {
+                    LOGGER.info(logtag+"is not primary, applying move remotely");
                     GameState gameState = remoteApplyMove(nextMove);
 
                     // if error is something like primary server uncontactable, then sleep and retry..
                     while (gameState == null) {
+                        LOGGER.info(logtag+"apply move remote fails. sleeping and retry");
                         Thread.sleep(SLEEP_PERIOD);
                         gameState = remoteApplyMove(nextMove);
-                        LOGGER.warning("[move] remoteApplyMove gameState = NULL, retry");
                     }
+                    LOGGER.info(logtag+"apply move remote succeeded. updating interface");
                     InterfaceData interfaceData = Common.prepareInterfaceData(gameState, gameRole);
                     gameInterface.updateInterface(interfaceData);
                 }
@@ -635,20 +658,24 @@ public class Game implements GameRemote {
                         case NORMAL:
                             // call the primary server to exit
                             // if uncontactable, just sleep for a while to get notified the new primary
+                            LOGGER.info(logtag+"trying to exit. is normal player.");
                             if (remoteApplyMove(EXIT) != null){
+                                LOGGER.info(logtag+"exit succeeded");
                                 exitSucceeded = true;
                             } else {
-                                LOGGER.warning("[move] remoteApplyExit fail, retry");
+                                LOGGER.info(logtag+"exit fails. wait and retry");
                             }
                         break;
                         case BACKUP:
                             // call the primary server to exit
                             // if uncontactable, it is likely that the game is undergoing critical period,
                             // just sleep and retry (next time I'm mostly likely to be the primary server)
+                            LOGGER.info(logtag+"trying to exit. is backup player.");
                             if (remoteApplyMove(EXIT) != null){
+                                LOGGER.info(logtag+"exit succeeded");
                                 exitSucceeded = true;
                             } else {
-                                LOGGER.warning("[move] remoteApplyExit fail, retry");
+                                LOGGER.info(logtag+"exit fails. wait and retry");
                             }
                         break;
                         case PRIMARY:
@@ -657,8 +684,9 @@ public class Game implements GameRemote {
                             //       but maybe it's better that we do some extra work
                             //       like promoting another primary&backup before shutting down
                             //       because if backup crashes when we exit, the game is over!
-                            LOGGER.info("[move] primary exit");
+                            LOGGER.info(logtag+"trying to exit. is primary player.");
                             exitSucceeded = true;
+                            LOGGER.info(logtag+"exit succeeded");
                         break;
                         default:
                             System.out.println("wrong role type");
@@ -723,18 +751,25 @@ public class Game implements GameRemote {
 
     // currently this function assumes playerID != primaryPlayerID
     private GameState applyPlayerExit(String playerID) {
+        String logtag = "[applyPlayerExit] ";
+
+        LOGGER.info(logtag+"removing player.");
         Coord coord = playerCoordMap.get(playerID);
         maze[coord.x][coord.y] = EMPTY;
         playerAddrMap.remove(playerID);
         playerCoordMap.remove(playerID);
         playerScores.remove(playerID);
+        LOGGER.info(logtag+"player removed from gamestate.");
 
         if (playerID == backupPlayerID){
             // backup exit, we need to find another one
+            LOGGER.info(logtag+"backup removed. try to promote another one to backup");
             promoteSomeoneToBackup();
         } else {
+            LOGGER.info(logtag+"normal player removed. try to update change to backup");
             boolean ok = updateBackup();
             if (!ok){
+                LOGGER.info(logtag+"failed to update change to backup. either no backup/backup is dead. Ignore and let helper deal with it ");
                 //TODO: recover backup
                 // Let's leave it to the helper thread and see whether it works well
                 // return null;
