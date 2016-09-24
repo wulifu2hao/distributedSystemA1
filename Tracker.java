@@ -35,23 +35,31 @@ public class Tracker implements TrackerRemote {
         return resp;
     }
 
-    public void addPlayerAddr(PlayerAddr playerAddr) {
+    public boolean addPlayerAddr(PlayerAddr playerAddr) {
         addrSet.add(playerAddr);
-        LOGGER.info("[addPlayerAddr] playerID: " + playerAddr.playerID +", then size becomes " + addrSet.size());
+        LOGGER.info("[addPlayerAddr] playerID: " + playerAddr.playerID +", then size becomes " + getSetStr());
+        return true;
     }
 
     public void removePlayerAddr(PlayerAddr playerAddr) {
         addrSet.remove(playerAddr);
-        LOGGER.info("[removePlayerAddr] playerID: " + playerAddr.playerID +", then size becomes " + addrSet.size());
+        LOGGER.info("[removePlayerAddr] playerID: " + playerAddr.playerID +", then size becomes " + getSetStr());
     }
 
     // TODO: make it synchronous so that only one player will become primary
     public boolean addPrimaryPlayer(PlayerAddr playerAddr) {
         addrSet.add(playerAddr);
-        System.out.println("add primary");
+        LOGGER.info("[addPrimaryPlayer] playerID: " + playerAddr.playerID +", then size becomes " + getSetStr());
         return true;
     }
 
+    private String getSetStr() {
+        String list = "";
+        for ( PlayerAddr addr : addrSet) {
+            list += addr.playerID + ", ";
+        }
+        return list;
+    }
 
     public static void main(String args[]) {
         if (args.length != 3) {

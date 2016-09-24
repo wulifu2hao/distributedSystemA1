@@ -167,7 +167,7 @@ public class Game implements GameRemote {
             }
         }
 
-        LOGGER.warning(logtag+"updating game interface");
+        LOGGER.warning(logtag+" updating game interface");
         udpateGameInterface();
         return gameState;
     }
@@ -289,12 +289,12 @@ public class Game implements GameRemote {
         GameState gameState = prepareGameState();
         gameState.isBecomeBackup = true;
         // find somebody to promote to backup
-        LOGGER.info(logtag+" findding another player to become backup");
+        LOGGER.info(logtag+" finding another player to become backup");
         for (Map.Entry<String, PlayerAddr> entry : playerAddrMap.entrySet()) {
             String playerID = entry.getKey();
             PlayerAddr playerAddr = entry.getValue();
 
-            if (playerID == this.myPlayerAddr.playerID) {
+            if (playerID.equals(this.myPlayerAddr.playerID)) {
                 continue;
             }
 
@@ -553,6 +553,9 @@ public class Game implements GameRemote {
             if (joinSucceed){
                 LOGGER.info(logtag+"join succeeded. init game interface.");
                 gameInterface = GameInterface.initGameInterface(myPlayerAddr.playerID, Common.prepareInterfaceData(prepareGameState(), gameRole));
+                if (!this.trackerStub.addPlayerAddr(this.myPlayerAddr)) {
+                    LOGGER.severe(logtag+"fail to add self address to tracker");
+                }
                 break;
             }
 
