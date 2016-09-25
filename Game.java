@@ -57,6 +57,7 @@ public class Game implements GameRemote {
     String[][] maze;
     Map<String, Integer> playerScores = new Hashtable<>();
     Map<String, PlayerAddr> playerAddrMap = new Hashtable<>();
+    private Lock gameStateLock = new ReentrantLock();
 
     private static final int DEFAULT_PORT = 0;
     private Lock lockJoinGame = new ReentrantLock();
@@ -134,6 +135,9 @@ public class Game implements GameRemote {
     // the param and returned type for this method is not carefully considered yet
     public GameState addOtherPlayer(PlayerAddr playerAddr){
         // TODO: shall we make this method synchronized since RMI remote call is multi-thread?
+
+        gameStateLock.lock();
+
         String logtag = "[addOtherPlayer] ";
 
         if (isPlayersFull()) {
@@ -171,6 +175,8 @@ public class Game implements GameRemote {
 
         LOGGER.warning(logtag+" updating game interface");
         udpateGameInterface();
+
+        gameStateLock.lock();
         return gameState;
     }
 
@@ -178,6 +184,8 @@ public class Game implements GameRemote {
     // @return: GameState as update result
     public GameState applyPlayerMove(String playerID, String move){
         String logtag = "[applyPlayerMove] ";
+
+        gameStateLock.lock();
 
         LOGGER.info(logtag+"playerID: "+ playerID + ", move: "+move);
         // the actual game logic goes here
@@ -227,6 +235,9 @@ public class Game implements GameRemote {
     
         LOGGER.warning(logtag+"updataing game interface");
         udpateGameInterface();
+
+        gameStateLock.unlock();
+
         return prepareGameState();
     }
 
@@ -364,7 +375,7 @@ public class Game implements GameRemote {
         // TODO synchronize
         String logtag = "[promoteSelfToPrimary] ";
  
-
+        gameStateLock.lock();
 
         // 1.1 update setting to make self primary
         this.gameRole = PRIMARY;
@@ -427,6 +438,8 @@ public class Game implements GameRemote {
         (new Thread(new PrimaryHelper(this))).start();
         LOGGER.info(logtag+" started the new primary helper thread");
 
+        gameStateLock.unlock();
+
         // 5. clear critical flag
     }
 
@@ -451,6 +464,8 @@ public class Game implements GameRemote {
     public void updateGameState(GameState gameState){
         String logtag = "[updateGameState] ";
 
+        gameStateLock.lock();
+
         LOGGER.info(logtag + "update player size: " + gameState.playerAddrMap.size());
         maze = gameState.maze;
         playerCoordMap = gameState.playerCoordMap;
@@ -474,6 +489,8 @@ public class Game implements GameRemote {
         }
 
         udpateGameInterface();
+
+        gameStateLock.unlock();
     }
 
     // you should call this method when you're sure that 
