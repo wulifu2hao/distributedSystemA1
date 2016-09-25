@@ -57,6 +57,12 @@ public class Game implements GameRemote {
     String[][] maze;
     Map<String, Integer> playerScores = new Hashtable<>();
     Map<String, PlayerAddr> playerAddrMap = new Hashtable<>();
+
+    // Methods that are lock by this lock
+    // addOtherPlayer
+    // applyPlayerMove
+    // promoteSelfToPrimary
+    // updateGameState
     private Lock gameStateLock = new ReentrantLock();
 
     private static final int DEFAULT_PORT = 0;
@@ -142,6 +148,7 @@ public class Game implements GameRemote {
 
         if (isPlayersFull()) {
             LOGGER.info(logtag + "fails because player full");        
+            gameStateLock.unlock();
             return null;
         }
 
@@ -176,7 +183,7 @@ public class Game implements GameRemote {
         LOGGER.warning(logtag+" updating game interface");
         udpateGameInterface();
 
-        gameStateLock.lock();
+        gameStateLock.unlock();
         return gameState;
     }
 
@@ -191,11 +198,16 @@ public class Game implements GameRemote {
         // the actual game logic goes here
         Coord coord = playerCoordMap.get(playerID);
         int newx = coord.x, newy = coord.y;
+        GameState gameState;
         switch (move){
             case REFRESH:
-                return prepareGameState();
+                gameState = prepareGameState();
+                gameStateLock.unlock();
+                return gameState;
             case EXIT:
-                return applyPlayerExit(playerID);
+                gameState = applyPlayerExit(playerID);
+                gameStateLock.unlock();
+                return gameState;
             case MOVE_WEST:
                 newy --; break;
             case MOVE_SOUTH:
@@ -207,11 +219,15 @@ public class Game implements GameRemote {
         }
         if (newx < 0 || newx >= N || newy < 0 || newy >= N) {
             LOGGER.info(logtag+"Illegal move (out of boundary)");
-            return prepareGameState();
+            gameState = prepareGameState();
+            gameStateLock.unlock();
+            return gameState;
         }
         if (!maze[newx][newy].equals(EMPTY) && !maze[newx][newy].equals(TREASURE)) {
             LOGGER.info(logtag+"Illegal move (occupied cell)");
-            return prepareGameState();
+            gameState = prepareGameState();
+            gameStateLock.unlock();
+            return gameState;
         }
         if (maze[newx][newy].equals(TREASURE)) {
             LOGGER.info(logtag+"gain a treasure. Congrats!");
@@ -236,9 +252,9 @@ public class Game implements GameRemote {
         LOGGER.warning(logtag+"updataing game interface");
         udpateGameInterface();
 
+        gameState = prepareGameState();
         gameStateLock.unlock();
-
-        return prepareGameState();
+        return gameState;
     }
 
 
