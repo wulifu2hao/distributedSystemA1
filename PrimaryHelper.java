@@ -93,7 +93,7 @@ public class PrimaryHelper implements Runnable  {
 			    String playerID = entry.getKey();
 			    PlayerAddr playerAddr = entry.getValue();
 
-			    if (playerID == primaryPlayer.myPlayerAddr.playerID || playerID == primaryPlayer.backupPlayerID) {
+			    if (playerID.equals(primaryPlayer.myPlayerAddr.playerID) || playerID.equals(primaryPlayer.backupPlayerID)) {
 			    	// no point checking them, we are only interested in normal players
 			    	continue;
 			    }

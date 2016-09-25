@@ -95,7 +95,7 @@ public class Game implements GameRemote {
             while (true) {
                 String nextMove = keyboard.nextLine();
                 player.move(nextMove);
-                if (nextMove == EXIT ){
+                if (nextMove.equals(EXIT)){
                     break;
                 }
             }
@@ -142,9 +142,12 @@ public class Game implements GameRemote {
     public GameState addOtherPlayer(PlayerAddr playerAddr){
         // TODO: shall we make this method synchronized since RMI remote call is multi-thread?
 
-        gameStateLock.lock();
-
         String logtag = "[addOtherPlayer] ";
+
+        LOGGER.info(logtag+"obtaining gamestatelock");
+        gameStateLock.lock();
+        LOGGER.info(logtag+"obtained gamestatelock");
+        
 
         if (isPlayersFull()) {
             LOGGER.info(logtag + "fails because player full");        
@@ -171,6 +174,8 @@ public class Game implements GameRemote {
             gameState.isBecomeBackup = true;
         } else {
             LOGGER.info(logtag+"updating backup about this change");
+            // TODO: currently stress test shows that this update doesn't take effect
+            //       pls investigate
             boolean ok = updateBackup();
             if (!ok) {
                 // current backup is dead, we should find another one
@@ -192,7 +197,9 @@ public class Game implements GameRemote {
     public GameState applyPlayerMove(String playerID, String move){
         String logtag = "[applyPlayerMove] ";
 
+        LOGGER.info(logtag+"obtaining gamestatelock");
         gameStateLock.lock();
+        LOGGER.info(logtag+"obtained gamestatelock");
 
         LOGGER.info(logtag+"playerID: "+ playerID + ", move: "+move);
         // the actual game logic goes here
@@ -261,7 +268,7 @@ public class Game implements GameRemote {
     // called by primary server to update gameState to backup
     private boolean updateBackup() {    
         String logtag = "[updateBackup] ";
-        if (this.backupPlayerID == ""){
+        if (this.backupPlayerID.equals("")){
             LOGGER.info(logtag+" backup not exist. skiped");
             return true;
         }
@@ -391,7 +398,9 @@ public class Game implements GameRemote {
         // TODO synchronize
         String logtag = "[promoteSelfToPrimary] ";
  
+        LOGGER.info(logtag+"obtaining gamestatelock");
         gameStateLock.lock();
+        LOGGER.info(logtag+"obtained gamestatelock");
 
         // 1.1 update setting to make self primary
         this.gameRole = PRIMARY;
@@ -413,7 +422,7 @@ public class Game implements GameRemote {
             String playerID = entry.getKey();
             PlayerAddr playerAddr = entry.getValue();
 
-            if (playerID == this.primaryPlayerID){
+            if (playerID.equals(this.primaryPlayerID)){
                 continue;
             }
 
@@ -480,7 +489,9 @@ public class Game implements GameRemote {
     public void updateGameState(GameState gameState){
         String logtag = "[updateGameState] ";
 
+        LOGGER.info(logtag+"obtaining gamestatelock");
         gameStateLock.lock();
+        LOGGER.info(logtag+"obtained gamestatelock");
 
         LOGGER.info(logtag + "update player size: " + gameState.playerAddrMap.size());
         maze = gameState.maze;
@@ -850,7 +861,7 @@ public class Game implements GameRemote {
         udpateGameInterface();
         LOGGER.info(logtag+"player removed from gamestate.");
 
-        if (playerID == backupPlayerID){
+        if (playerID.equals(backupPlayerID)){
             // backup exit, we need to find another one
             LOGGER.info(logtag+"backup removed. try to promote another one to backup");
             promoteSomeoneToBackup();
