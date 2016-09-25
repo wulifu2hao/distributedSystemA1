@@ -508,7 +508,7 @@ public class Game implements GameRemote {
         // try join game till success
         // assume the tracker never fails, it should be able to joingame just by keep retrying
         String logtag = "[joinGame] ";
-        lockJoinGame.lock();
+        // lockJoinGame.lock();
         int counter = 1;
         try {
             while (true) {
@@ -568,7 +568,7 @@ public class Game implements GameRemote {
         }catch(Exception e) {
             e.printStackTrace();
         }finally {
-            lockJoinGame.unlock();
+            // lockJoinGame.unlock();
         }
 
         LOGGER.info(logtag+"join succeeded and finished.");
