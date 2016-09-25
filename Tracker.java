@@ -7,6 +7,9 @@ import java.rmi.registry.LocateRegistry;
 import java.rmi.server.UnicastRemoteObject;
 import java.util.logging.Logger;
 
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReentrantLock;
+
 /*
     Tracker is the class to maintain players' IP addresses and ports,
     and acts as the entry point of all players since its IP is well-known to the public
@@ -15,6 +18,7 @@ public class Tracker implements TrackerRemote {
 
     private static final String TAG = "tracker";
     private Set<PlayerAddr> addrSet;
+    private Lock addrSetLock = new ReentrantLock();
     private int dim, treasures_num;
     private final Logger LOGGER = Logger.getLogger("Game");
 
@@ -25,6 +29,7 @@ public class Tracker implements TrackerRemote {
     }
 
     public TrackerResponse getTrackerInfo(){
+        // TODO: we may we to lock addrSet here for read also
         TrackerResponse resp = new TrackerResponse();
         Iterator<PlayerAddr> it = addrSet.iterator();
         if ( it.hasNext() ) {
@@ -36,21 +41,33 @@ public class Tracker implements TrackerRemote {
     }
 
     public boolean addPlayerAddr(PlayerAddr playerAddr) {
+        addrSetLock.lock();
         addrSet.add(playerAddr);
+        addrSetLock.unlock();
         LOGGER.info("[addPlayerAddr] playerID: " + playerAddr.playerID +", then size becomes " + getSetStr());
         return true;
     }
 
     public void removePlayerAddr(PlayerAddr playerAddr) {
+        addrSetLock.lock();
         addrSet.remove(playerAddr);
+        addrSetLock.unlock();
         LOGGER.info("[removePlayerAddr] playerID: " + playerAddr.playerID +", then size becomes " + getSetStr());
     }
 
     // TODO: make it synchronous so that only one player will become primary
     public boolean addPrimaryPlayer(PlayerAddr playerAddr) {
-        addrSet.add(playerAddr);
-        LOGGER.info("[addPrimaryPlayer] playerID: " + playerAddr.playerID +", then size becomes " + getSetStr());
-        return true;
+        boolean success = false;
+
+        addrSetLock.lock();
+        if (addrSet.size() == 0){
+            addrSet.add(playerAddr);
+            success = true;
+        }        
+        addrSetLock.unlock();
+        
+        LOGGER.info("[addPrimaryPlayer] playerID: " + playerAddr.playerID +" isSucceeded: "+success+", then size becomes " + getSetStr());
+        return success;
     }
 
     private String getSetStr() {
