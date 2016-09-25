@@ -73,6 +73,7 @@ public class GameInterface extends JFrame {
     public void updateInterface(InterfaceData data) {
         this.data = data;
         drawCenter();
+        pack();
         revalidate();
         setVisible(true);
     }
