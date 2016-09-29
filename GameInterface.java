@@ -103,13 +103,14 @@ public class GameInterface extends JFrame {
         }
 
         /* add center panel with flowlayout */
-        if (center != null) {
-            remove(center);
+        if (center == null) {
+            center = new JPanel();
+            center.setLayout(new FlowLayout());
+            center.setBorder(new EmptyBorder(10, 10, 10, 10));
+            add(center, BorderLayout.CENTER);
+        } else {
+            center.removeAll();
         }
-        center = new JPanel();
-        center.setLayout(new FlowLayout());
-        center.setBorder(new EmptyBorder(10, 10, 10, 10));
-        add(center, BorderLayout.CENTER);
 
 		/* add centerleft with gridlayout */
         JPanel centerleft = new JPanel();
