@@ -21,11 +21,19 @@ public class Tracker implements TrackerRemote {
     private Lock addrSetLock = new ReentrantLock();
     private int dim, treasures_num;
     private final Logger LOGGER = Logger.getLogger("Game");
+    private String logtag = "[tracker]";
 
     public Tracker(int dim, int treasures_num){
         this.addrSet = new HashSet<>();
         this.dim = dim;
         this.treasures_num = treasures_num;
+
+        String ipAddr = Common.getLocalAddress();
+        if (ipAddr == null) {
+            LOGGER.severe("Cannot get ip address for tracker");
+            return;
+        } 
+        LOGGER.info(logtag + "tracker ip address: " + ipAddr);
     }
 
     public TrackerResponse getTrackerInfo(){

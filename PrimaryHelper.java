@@ -51,7 +51,7 @@ public class PrimaryHelper implements Runnable  {
             }
 
             // if has backupPlayer, let's ping it to check whether it's alive
-            if (primaryPlayer.backupPlayerID != "") {
+            if (!primaryPlayer.backupPlayerID.equals("")) {
 				boolean backupUncontactable = false;
 			    try {		    	
 			    	PlayerAddr backupAddr = primaryPlayer.playerAddrMap.get(primaryPlayer.backupPlayerID);
@@ -81,8 +81,8 @@ public class PrimaryHelper implements Runnable  {
 					// b) if the exist another player alive, he will become backup
 					// 	  i.e. the only possibility that we fails to promote a backup shoud be 
 					// 		   because we are the only player left in the game
-					LOGGER.info(logtag+"attempt to promote someone to backup...");
-					primaryPlayer.promoteSomeoneToBackup();
+					// LOGGER.info(logtag+"attempt to promote someone to backup...");
+					// primaryPlayer.promoteSomeoneToBackup();
 	            } 
 
             }

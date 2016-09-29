@@ -125,7 +125,8 @@ public class Game implements GameRemote {
         if (ipAddr == null) {
             LOGGER.severe("Cannot get ip address for " + playerID);
             return;
-        }
+        } 
+        LOGGER.info(logtag + "my ip address: " + ipAddr);
         this.myPlayerAddr = new PlayerAddr(ipAddr, DEFAULT_PORT, playerID);
         this.myPlayerAddr.playerID = playerID;
         LOGGER.info(logtag + "finish init myPlayerAddr");
